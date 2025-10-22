@@ -36,6 +36,8 @@ def load_config() -> Dict[str, Any]:
         config['telegram_bot_token'] = os.getenv('TELEGRAM_BOT_TOKEN', config['telegram_bot_token'])
     if 'telegram_chat_id' in config:
         config['telegram_chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['telegram_chat_id'])
+    if 'serper_api_key' in config:
+        config['serper_api_key'] = os.getenv('SERPER_API_KEY', config['serper_api_key'])
     
     return config
 
@@ -67,15 +69,15 @@ def setup_logging() -> logging.Logger:
 
 def deduplicate_companies(companies: List[Dict]) -> List[Dict]:
     """
-    Remove duplicate companies based on domain
+    Remove duplicate companies based on job_page_url (the link)
     """
-    seen_domains = set()
+    seen_urls = set()
     unique_companies = []
     
     for company in companies:
-        domain = company.get('domain')
-        if domain and domain not in seen_domains:
-            seen_domains.add(domain)
+        job_url = company.get('job_page_url')
+        if job_url and job_url not in seen_urls:
+            seen_urls.add(job_url)
             unique_companies.append(company)
     
     return unique_companies
