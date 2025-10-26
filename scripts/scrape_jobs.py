@@ -1,7 +1,14 @@
 import json
 import re
+import hashlib
+import os
+import sys
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scripts.utils import setup_logging
 
 
 class JobExtractor:
@@ -201,27 +208,106 @@ class JobExtractor:
         """Extract job URL from element."""
         link = element.find('a', href=True)
         return link['href'] if link else None
+
+
+def generate_url_hash(url: str) -> str:
+    """Generate a hash from a URL for unique identification."""
+    if not url:
+        return ""
+    return hashlib.md5(url.encode('utf-8')).hexdigest()
+
+
+def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
+    """Add a hash field to each job based on its URL."""
+    for job in jobs:
+        job['url_hash'] = generate_url_hash(job.get('url', ''))
+    return jobs
+
+
+def merge_jobs(new_jobs: List[Dict], existing_jobs: List[Dict]) -> List[Dict]:
+    """
+    Merge new jobs with existing jobs, avoiding duplicates based on URL.
     
+    Args:
+        new_jobs: List of newly extracted jobs
+        existing_jobs: List of existing jobs
+        
+    Returns:
+        Merged list of unique jobs
+    """
+    # Create a set of existing URL hashes for quick lookup
+    existing_hashes = {job.get('url_hash', '') for job in existing_jobs}
     
+    # Filter out jobs that already exist
+    unique_new_jobs = [
+        job for job in new_jobs 
+        if job.get('url_hash', '') not in existing_hashes
+    ]
+    
+    # Combine existing and new unique jobs
+    merged_jobs = existing_jobs + unique_new_jobs
+    
+    return merged_jobs
+
+
+def load_existing_jobs(filepath: str) -> List[Dict]:
+    """Load existing jobs from file if it exists."""
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                jobs = json.load(f)
+                # Ensure all jobs have hashes
+                for job in jobs:
+                    if 'url_hash' not in job or not job.get('url_hash'):
+                        job['url_hash'] = generate_url_hash(job.get('url', ''))
+                return jobs
+        except json.JSONDecodeError:
+            print(f"Warning: Could not parse {filepath}, starting with empty list")
+            return []
+    return []
+
 
 if __name__ == "__main__":
     import os
 
+    # Setup logging
+    logger = setup_logging()
+    
+    logger.info("Starting job scraping process")
     print("Current working directory:", os.getcwd())
     print("Files in this directory:", os.listdir())
 
+    # Load existing jobs from data/jobs_raw.json
+    existing_jobs = load_existing_jobs('data/jobs_raw.json')
+    logger.info(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
+    print(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
+
     # Then your load command:
-    with open('scripts/debug_lumenis.html', 'r', encoding='utf-8') as f:
+    with open('scripts/debug_dream.html', 'r', encoding='utf-8') as f:
         html_content = f.read()
     
 
     extractor = JobExtractor(html_content)
-    jobs = extractor.extract_jobs()
+    new_jobs = extractor.extract_jobs()
+    
+    # Add hash to new jobs
+    new_jobs = add_hash_to_jobs(new_jobs)
+    
+    logger.info(f"Extracted {len(new_jobs)} jobs from HTML")
+    print(f"Found {len(new_jobs)} new jobs")
+    
+    # Merge with existing jobs
+    all_jobs = merge_jobs(new_jobs, existing_jobs)
+    
+    # Calculate how many were actually added
+    jobs_added = len(all_jobs) - len(existing_jobs)
     
     # Print results
-    print(f"Found {len(jobs)} jobs:\n")
+    logger.info(f"Total jobs after merging: {len(all_jobs)}, New jobs added: {jobs_added}")
+    print(f"\nTotal jobs after merging: {len(all_jobs)}")
+    print(f"New jobs added: {jobs_added}\n")
     
-    for i, job in enumerate(jobs, 1):
+    for i, job in enumerate(all_jobs, 1):
         print(f"Job {i}:")
         print(f"  Title: {job.get('title')}")
         print(f"  Department: {job.get('department')}")
@@ -230,6 +316,7 @@ if __name__ == "__main__":
         print(f"  Experience: {job.get('experience_level')}")
         print(f"  Workplace: {job.get('workplace_type')}")
         print(f"  URL: {job.get('url')}")
+        print(f"  URL Hash: {job.get('url_hash')}")
         
         # Print description if available
         if isinstance(job.get('description'), dict):
@@ -238,11 +325,12 @@ if __name__ == "__main__":
         
         print()
     
-    # Optionally save to JSON
-    with open('jobs.json', 'w', encoding='utf-8') as f:
-        json.dump(jobs, f, indent=2, ensure_ascii=False)
+    # Save merged jobs to data/jobs_raw.json
+    with open('data/jobs_raw.json', 'w', encoding='utf-8') as f:
+        json.dump(all_jobs, f, indent=2, ensure_ascii=False)
     
-    print(f"Jobs saved to jobs.json")
+    logger.info(f"Successfully saved {len(all_jobs)} jobs to data/jobs_raw.json ({jobs_added} new jobs added)")
+    print(f"Jobs saved to data/jobs_raw.json")
 
     # soup = BeautifulSoup(html_content, "html.parser")
     # job_posting = soup.find('a', class_='positionItem')
