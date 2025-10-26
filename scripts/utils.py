@@ -11,6 +11,7 @@ import requests
 import time
 from typing import Dict, List, Any
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 
 def load_config() -> Dict[str, Any]:
@@ -42,27 +43,70 @@ def load_config() -> Dict[str, Any]:
     return config
 
 
-def setup_logging() -> logging.Logger:
+def setup_logging(config: Dict[str, Any] | None = None) -> logging.Logger:
     """
-    Set up logging configuration
+    Set up logging configuration with rotation support.
+    Accepts optional config to avoid re-loading from disk.
     """
-    config = load_config()
+    if config is None:
+        config = load_config()
+
     log_config = config.get('logging', {})
-    
+
     # Create logs directory if it doesn't exist
     Path('logs').mkdir(exist_ok=True)
-    
-    # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, log_config.get('level', 'INFO')),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_config.get('file', 'logs/jobhunter.log')),
-            logging.StreamHandler()
-        ]
+
+    # Prepare logger
+    logger = logging.getLogger('jobhunter')
+    # Clear existing handlers to avoid duplicates
+    if logger.handlers:
+        logger.handlers.clear()
+
+    level_name = str(log_config.get('level', 'INFO')).upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logger.setLevel(level)
+
+    formatter = logging.Formatter(
+        fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
-    return logging.getLogger('jobhunter')
+
+    # File handler with rotation
+    log_file_path = log_config.get('file', 'logs/jobhunter.log')
+    max_size_str = str(log_config.get('max_size', '10MB'))
+    backup_count = int(log_config.get('backup_count', 5))
+
+    def _parse_size_to_bytes(size_str: str) -> int:
+        s = size_str.strip().upper()
+        try:
+            if s.endswith('KB'):
+                return int(float(s[:-2]) * 1024)
+            if s.endswith('MB'):
+                return int(float(s[:-2]) * 1024 * 1024)
+            if s.endswith('GB'):
+                return int(float(s[:-2]) * 1024 * 1024 * 1024)
+            # Raw integer bytes
+            return int(s)
+        except Exception:
+            # Default to 10MB if parsing fails
+            return 10 * 1024 * 1024
+
+    max_bytes = _parse_size_to_bytes(max_size_str)
+
+    file_handler = RotatingFileHandler(
+        log_file_path,
+        maxBytes=max_bytes,
+        backupCount=backup_count
+    )
+    file_handler.setFormatter(formatter)
+
+    # Console handler
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+
+    return logger
 
 
 

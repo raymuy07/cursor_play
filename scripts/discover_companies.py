@@ -7,8 +7,16 @@ Discovers company job pages using Google dork queries via Serper API
 import requests
 import json
 import time
-from typing import List, Dict
-from utils import load_config, setup_logging, deduplicate_companies
+import random
+import re
+from typing import List, Dict, Any, Optional
+from utils import (
+    load_config,
+    setup_logging,
+    deduplicate_companies,
+    rate_limit_delay,
+    save_json,
+)
 
 
 def discover_companies() -> List[Dict]:
@@ -16,7 +24,7 @@ def discover_companies() -> List[Dict]:
     Discover company job pages using Google dork queries via Serper API
     """
     config = load_config()
-    logger = setup_logging()
+    logger = setup_logging(config)
     
     # Domains to search for job pages
     # For now only Comeet is supported, but we can add more later
@@ -46,7 +54,7 @@ def discover_companies() -> List[Dict]:
             logger.error(f"Error searching {domain}: {e}")
         
         # Rate limiting between domains
-        time.sleep(config['scraping']['rate_limit_delay'])
+        rate_limit_delay()
     
     # Load existing companies and merge with new ones
     existing_companies = load_existing_companies()
@@ -54,19 +62,21 @@ def discover_companies() -> List[Dict]:
     
     # Deduplicate and save
     unique_companies = deduplicate_companies(all_companies)
-    
-    with open('data/companies.json', 'w') as f:
-        json.dump(unique_companies, f, indent=2)
+
+    save_json(unique_companies, 'data/companies.json')
     
     logger.info(f"Total companies: {len(unique_companies)} (existing: {len(existing_companies)}, new: {len(unique_companies) - len(existing_companies)})")
     return unique_companies
 
 
-def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
+def search_domain_jobs(domain: str, config: Dict[str, Any], logger) -> List[Dict]:
     """
     Search for job pages on a specific domain using Serper API
     """
-    serper_api_key = config['serper_api_key']
+    serper_api_key = config.get('serper_api_key')
+    if not serper_api_key or str(serper_api_key).startswith('${'):
+        logger.warning("SERPER_API_KEY not configured. Skipping Serper search for domain '%s'", domain)
+        return []
 
     # Get domain-specific template or use default
     domain_templates = config['google_dork']['domain_templates']
@@ -85,6 +95,9 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
     companies = []
     
     # Search multiple pages
+    timeout_seconds = config.get('scraping', {}).get('timeout', 30)
+    max_retries = int(config.get('scraping', {}).get('max_retries', 3))
+
     for page in range(1, max_pages + 1):
         logger.info(f"Searching page {page} for {domain}")
         
@@ -92,24 +105,55 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
             # Prepare Serper API request
             url = "https://google.serper.dev/search"
             
-            # Create payload for Serper API
-            payload = json.dumps([{
+            # Create payload for Serper API (single request)
+            payload_obj = {
                 "q": query,
                 "page": page
-            }])
+            }
             
             headers = {
                 'X-API-KEY': serper_api_key,
                 'Content-Type': 'application/json'
             }
             
-            # Make API request
-            response = requests.post(url, headers=headers, data=payload, timeout=30)
-            response.raise_for_status()
+            # Make API request with retries and backoff
+            attempt = 0
+            response = None
+            while attempt < max_retries:
+                attempt += 1
+                try:
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        json=payload_obj,
+                        timeout=timeout_seconds,
+                    )
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.HTTPError as http_err:
+                    status = getattr(http_err.response, 'status_code', None)
+                    if status in (429, 500, 502, 503, 504) and attempt < max_retries:
+                        backoff = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                        logger.warning(
+                            "Serper HTTP %s on attempt %s/%s for page %s; backing off %.2fs",
+                            status, attempt, max_retries, page, backoff
+                        )
+                        time.sleep(backoff)
+                        continue
+                    raise
+                except requests.exceptions.RequestException as req_err:
+                    if attempt < max_retries:
+                        backoff = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                        logger.warning(
+                            "Serper request error on attempt %s/%s for page %s; backing off %.2fs: %s",
+                            attempt, max_retries, page, backoff, req_err
+                        )
+                        time.sleep(backoff)
+                        continue
+                    raise
             
             # Parse response
             search_results = response.json()
-            search_results = search_results[0]
             
             if not search_results or 'organic' not in search_results:
                 logger.warning(f"No organic results found for {domain} page {page}")
@@ -125,7 +169,7 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
                 break
             
             # Rate limiting between pages
-            time.sleep(config['scraping']['rate_limit_delay'])
+            rate_limit_delay()
             
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed for {domain} page {page}: {e}")
@@ -175,7 +219,7 @@ def process_search_results(organic_results: List[Dict], domain: str, logger) -> 
     return companies
 
 
-def extract_company_name_from_title(title: str, domain: str) -> str:
+def extract_company_name_from_title(title: str, domain: str) -> Optional[str]:
     """
     Extract company name from job page title
     Examples:
@@ -183,8 +227,15 @@ def extract_company_name_from_title(title: str, domain: str) -> str:
     - "Jobs at Tesla" -> "Tesla" greenhouse.io
     """
     try:
-        # Remove domain-specific suffixes
-        title_clean = title.replace(f" - {domain}", "").replace(f" | {domain}", "")
+        # Remove common provider brand suffixes regardless of case
+        providers = [
+            'Comeet', 'Greenhouse', 'Lever', 'Workday', 'BambooHR'
+        ]
+        title_clean = title
+        for provider in providers:
+            for sep in [' - ', ' | ', ' — ']:
+                pattern = re.compile(re.escape(sep + provider) + r"$", flags=re.IGNORECASE)
+                title_clean = pattern.sub('', title_clean)
         
         # Common patterns to extract company name
         patterns = [
@@ -211,7 +262,7 @@ def extract_company_name_from_title(title: str, domain: str) -> str:
                 return company_name
         
         # Fallback: return the first part before any separator
-        company_name = title_clean.split(" - ")[0].split(" | ")[0].strip()
+        company_name = title_clean.split(" - ")[0].split(" | ")[0].split(" — ")[0].strip()
         return company_name if company_name else None
         
     except Exception:
