@@ -1,362 +1,258 @@
-#!/usr/bin/env python3
-"""
-Job Scraper Script
-Scrapes engineering-relevant job listings from Comeet career pages
-"""
-
-import requests
 import json
-import time
 import re
-from typing import List, Dict, Set
+from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
-from utils import load_config, setup_logging, load_json, save_json
 
 
-def is_engineering_job(job_title: str, department: str = "") -> bool:
-    """
-    Determine if a job is engineering-relevant based on keywords
-    """
-    # Combine job title and department for analysis
-    text = f"{job_title} {department}".lower()
+class JobExtractor:
+    """Extract job information from HTML using multiple parsing strategies."""
     
-    # Include keywords (engineering-relevant)
-    include_keywords = [
-        "engineer", "developer", "software", "backend", "frontend", "fullstack", 
-        "full-stack", "devops", "data", "r&d", "research", "architect", 
-        "programmer", "technical", "qa", "automation", "ml", "ai", "cloud", 
-        "infrastructure", "security", "cyber", "sre", "platform", "api", 
-        "mobile", "ios", "android", "web", "full stack", "machine learning",
-        "artificial intelligence", "data science", "analytics", "python",
-        "javascript", "java", "c++", "react", "angular", "vue", "node",
-        "kubernetes", "docker", "aws", "azure", "gcp", "microservices"
-    ]
+    def __init__(self, html_content: str):
+        self.html_content = html_content
+        self.soup = BeautifulSoup(html_content, 'html.parser')
     
-    # Exclude keywords (non-engineering)
-    exclude_keywords = [
-        "marketing", "hr", "human resources", "sales", "finance", "accounting",
-        "legal", "admin", "office manager", "recruiter", "talent acquisition",
-        "customer success", "support", "operations", "business", "product manager",
-        "project manager", "scrum master", "designer", "ui/ux", "content",
-        "social media", "community", "partnership", "business development"
-    ]
-    
-    # Check for exclude keywords first
-    for keyword in exclude_keywords:
-        if keyword in text:
-            return False
-    
-    # Check for include keywords
-    for keyword in include_keywords:
-        if keyword in text:
-            return True
-    
-    return False
-
-
-def extract_jobs_from_page(html_content: str, company_url: str, company_name: str) -> List[Dict]:
-    """
-    Extract job listings from Comeet HTML page
-    """
-    soup = BeautifulSoup(html_content, 'html.parser')
-    jobs = []
-    
-    try:
+    def extract_jobs(self) -> List[Dict]:
+        """
+        Try multiple extraction methods and return the first successful result.
         
-        # Look for Comeet-specific job patterns
-        # Pattern 1: Comeet positionItem links (most common pattern)
-        position_items = soup.find_all('a', class_='positionItem')
+        Returns:
+            List of job dictionaries
+        """
+        # Method 1: Extract from JavaScript variable (Comeet pattern)
+        jobs = self._extract_from_js_variable()
+        if jobs:
+            return jobs
         
-        for position_item in position_items:
-            href = position_item.get('href', '')
+        # Method 2: Extract from HTML elements (placeholder for alternative pattern)
+        jobs = self._extract_from_html_elements()
+        if jobs:
+            return jobs
+        
+        # Method 3: Extract from JSON-LD schema (placeholder)
+        
+        return []
+    
+    def _extract_from_js_variable(self) -> List[Dict]:
+        """
+        Extract job data from JavaScript variable (Comeet pattern).
+        Pattern: COMPANY_POSITIONS_DATA = [...];
+        """
+        try:
+            # Find the COMPANY_POSITIONS_DATA variable
+            pattern = r'COMPANY_POSITIONS_DATA\s*=\s*(\[.*?\]);'
+            match = re.search(pattern, self.html_content, re.DOTALL)
             
-            # Skip if not a valid job URL
-            if not href or not href.startswith('https://'):
-                continue
+            if match:
+                json_str = match.group(1)
+                jobs_data = json.loads(json_str)
+                
+                # Parse and structure the job information
+                jobs = []
+                for job in jobs_data:
+                    job_info = {
+                        'title': job.get('name'),
+                        'department': job.get('department'),
+                        'location': self._parse_location(job.get('location', {})),
+                        'employment_type': job.get('employment_type'),
+                        'experience_level': job.get('experience_level'),
+                        'workplace_type': job.get('workplace_type'),
+                        'uid': job.get('uid'),
+                        'url': job.get('url_comeet_hosted_page'),
+                        'company_name': job.get('company_name'),
+                        'last_updated': job.get('time_updated'),
+                        'description': self._parse_custom_fields(job.get('custom_fields', {}))
+                    }
+                    jobs.append(job_info)
+                
+                return jobs
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"Error parsing JS variable: {e}")
+        
+        return []
+    
+    def _extract_from_html_elements(self) -> List[Dict]:
+        """
+        Extract job data from HTML elements (alternative pattern).
+        Handles multiple common patterns including Angular-based job listings.
+        """
+        jobs = []
+        
+        # Pattern 1: Angular/Comeet positionItem links
+        job_links = self.soup.find_all('a', class_='positionItem')
+        
+        for link in job_links:
+            # Extract title
+            title_elem = link.find('span', class_='positionLink')
+            title = title_elem.get_text(strip=True) if title_elem else None
             
-            # Extract job title from positionLink span
-            job_title = ""
-            position_link = position_item.find('span', class_='positionLink')
-            if position_link:
-                job_title = position_link.get_text(strip=True)
+            # Extract URL
+            url = link.get('href') or link.get('ng-href')
             
-            # Skip if no title found
-            if not job_title:
-                continue
+            # Extract details from the list
+            details_list = link.find('ul', class_='positionDetails')
+            location = None
+            experience_level = None
+            employment_type = None
             
-            # Extract job details from positionDetails
-            department = ""
-            experience_level = ""
-            employment_type = ""
-            location = ""
-            
-            position_details = position_item.find('ul', class_='positionDetails')
-            if position_details:
-                detail_items = position_details.find_all('li')
-                for item in detail_items:
+            if details_list:
+                items = details_list.find_all('li')
+                for item in items:
                     text = item.get_text(strip=True)
                     
-                    # Check for department (usually appears as "Software", "R&D", etc.)
-                    if any(dept in text.lower() for dept in ["software", "r&d", "engineering", "development", "technology", "tech"]):
-                        department = text
-                    # Check for experience level
-                    elif any(level in text.lower() for level in ["junior", "senior", "mid", "lead", "principal", "staff"]):
-                        experience_level = text
-                    # Check for employment type
-                    elif any(emp_type in text.lower() for emp_type in ["full-time", "part-time", "contract", "intern"]):
-                        employment_type = text
-                    # Check for location (usually has map marker icon)
-                    elif item.find('i', class_='fa-map-marker'):
+                    # Check if it contains location icon
+                    if item.find('i', class_='fa-map-marker'):
                         location = text
+                    # Check for common employment type keywords
+                    elif any(keyword in text.lower() for keyword in ['full-time', 'part-time', 'contract', 'temporary', 'freelance']):
+                        employment_type = text
+                    # Check for experience level keywords
+                    elif any(keyword in text.lower() for keyword in ['senior', 'junior', 'mid-level', 'entry', 'lead', 'principal', 'intern']):
+                        experience_level = text
+                    # If none of the above, try to infer
+                    else:
+                        # If it's a short text without special chars, might be experience or type
+                        if len(text.split()) <= 2:
+                            if not experience_level:
+                                experience_level = text
+                            elif not employment_type:
+                                employment_type = text
             
-            # Filter for engineering jobs
-            if is_engineering_job(job_title, department):
-                job_data = {
-                    "job_title": job_title,
-                    "job_url": href,
-                    "department": department or "General",
-                    "experience_level": experience_level,
-                    "employment_type": employment_type,
-                    "location": location,
-                    "scraped_at": time.time()
-                }
-                jobs.append(job_data)
-                print(f"Found engineering job: {job_title} ({department or 'General'})")
-        
-        # Pattern 2: Fallback - look for any job-related links
-        if not jobs:
-            print(f"No positionItem found for {company_name}, trying fallback patterns...")
-            
-            # Look for links that might be job postings
-            all_links = soup.find_all('a', href=True)
-            for link in all_links:
-                href = link.get('href', '')
-                
-                # Check if this looks like a job URL
-                if ('jobs' in href or 'careers' in href) and href.startswith('https://'):
-                    # Try to extract job title from link text or nearby elements
-                    job_title = link.get_text(strip=True)
-                    
-                    # If no text in link, try to find nearby text
-                    if not job_title:
-                        parent = link.parent
-                        if parent:
-                            job_title = parent.get_text(strip=True)
-                    
-                    # Skip if still no title or if it's just the company name
-                    if not job_title or job_title.lower() == company_name.lower():
-                        continue
-                    
-                    # Try to extract department from context
-                    department = ""
-                    current_element = link.parent
-                    for _ in range(3):  # Check up to 3 levels up
-                        if current_element:
-                            dept_text = current_element.get_text(strip=True).lower()
-                            if any(dept in dept_text for dept in ["r&d", "engineering", "development", "technology", "tech", "software"]):
-                                department = "R&D"
-                                break
-                            current_element = current_element.parent
-                    
-                    # Filter for engineering jobs
-                    if is_engineering_job(job_title, department):
-                        job_data = {
-                            "job_title": job_title,
-                            "job_url": href,
-                            "department": department or "General",
-                            "scraped_at": time.time()
-                        }
-                        jobs.append(job_data)
-                        print(f"Found engineering job (fallback): {job_title}")
-    
-    except Exception as e:
-        print(f"Error parsing HTML for {company_name}: {e}")
-    
-    return jobs
-
-
-def scrape_company_jobs(company_data: Dict, config: Dict, logger) -> List[Dict]:
-    """
-    Scrape jobs from a single company's career page
-    """
-    company_url = company_data['job_page_url']
-    company_name = company_data['company_name']
-    
-    logger.info(f"Scraping jobs for {company_name} at {company_url}")
-    
-    # Rate limiting
-    time.sleep(config['job_scraping']['rate_limit_delay'])
-    
-    # Retry logic
-    max_retries = config['job_scraping']['max_retries']
-    timeout = config['job_scraping']['timeout']
-    
-    for attempt in range(max_retries):
-        try:
-            # Set headers to mimic a real browser
-            headers = {
-                'User-Agent': config['scraping']['user_agent'],
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
+            job_info = {
+                'title': title,
+                'location': location,
+                'employment_type': employment_type,
+                'experience_level': experience_level,
+                'url': url
             }
             
-            response = requests.get(company_url, headers=headers, timeout=timeout)
-            response.raise_for_status()
+            # Only add if we found at least a title
+            if job_info['title']:
+                jobs.append(job_info)
+        
+        # If no jobs found with Pattern 1, try Pattern 2: Generic job cards
+        if not jobs:
+            job_cards = self.soup.find_all('div', class_=['job-card', 'job-listing', 'job-item', 'position-card'])
             
-            # Extract jobs from HTML
-            jobs = extract_jobs_from_page(response.text, company_url, company_name)
-            
-            logger.info(f"Found {len(jobs)} engineering jobs for {company_name}")
-            return jobs
-            
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Attempt {attempt + 1} failed for {company_name}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff
-            else:
-                logger.error(f"All attempts failed for {company_name}")
-                return []
-        except Exception as e:
-            logger.error(f"Unexpected error scraping {company_name}: {e}")
-            return []
-    
-    return []
-
-
-def deduplicate_jobs(jobs_data: Dict) -> Dict:
-    """
-    Remove duplicate jobs based on job_url
-    """
-    seen_job_urls = set()
-    deduplicated_data = {}
-    
-    for company_url, company_data in jobs_data.items():
-        if 'jobs' in company_data:
-            unique_jobs = []
-            for job in company_data['jobs']:
-                job_url = job.get('job_url')
-                if job_url and job_url not in seen_job_urls:
-                    seen_job_urls.add(job_url)
-                    unique_jobs.append(job)
-            
-            # Only keep companies with jobs
-            if unique_jobs:
-                company_data['jobs'] = unique_jobs
-                deduplicated_data[company_url] = company_data
-    
-    return deduplicated_data
-
-
-def update_companies_timestamp(companies: List[Dict], scraped_companies: Set[str]):
-    """
-    Update last_scraped timestamp for successfully scraped companies
-    """
-    current_time = time.time()
-    for company in companies:
-        if company['job_page_url'] in scraped_companies:
-            company['last_scraped'] = current_time
-
-
-def scrape_all_jobs() -> Dict:
-    """
-    Scrape jobs from all companies in companies.json
-    """
-    config = load_config()
-    logger = setup_logging()
-    
-    # Load existing companies
-    companies = load_json('data/companies.json')
-    if not companies:
-        logger.error("No companies found in data/companies.json")
-        return {}
-    
-    # Load existing jobs data
-    existing_jobs = load_json('data/jobs_raw.json')
-    if not existing_jobs:
-        existing_jobs = {}
-    
-    logger.info(f"Starting job scraping for {len(companies)} companies")
-    
-    scraped_companies = set()
-    total_jobs_found = 0
-    
-    for company in companies:
-        try:
-            # Scrape jobs for this company
-            jobs = scrape_company_jobs(company, config, logger)
-            
-            if jobs:
-                company_url = company['job_page_url']
-                company_name = company['company_name']
-                
-                # Add to jobs data structure
-                existing_jobs[company_url] = {
-                    "company_name": company_name,
-                    "company_url": company_url,
-                    "last_scraped": time.time(),
-                    "jobs": jobs
+            for card in job_cards:
+                job_info = {
+                    'title': self._safe_extract(card, ['h2', 'h3', '.job-title', '.position-title']),
+                    'department': self._safe_extract(card, ['.department', '.team', '.category']),
+                    'location': self._safe_extract(card, ['.location', '.job-location']),
+                    'employment_type': self._safe_extract(card, ['.employment-type', '.job-type']),
+                    'url': self._extract_link(card)
                 }
                 
-                scraped_companies.add(company_url)
-                total_jobs_found += len(jobs)
+                # Only add if we found at least a title
+                if job_info['title']:
+                    jobs.append(job_info)
+        
+        return jobs
+    
+    
+    def _parse_location(self, location_dict: Dict) -> str:
+        """Parse location dictionary into readable string."""
+        if not location_dict:
+            return "Not specified"
+        
+        parts = []
+        if location_dict.get('city'):
+            parts.append(location_dict['city'])
+        if location_dict.get('country'):
+            parts.append(location_dict['country'])
+        
+        if location_dict.get('is_remote'):
+            parts.append("(Remote)")
+        
+        return ", ".join(parts) if parts else location_dict.get('name', 'Not specified')
+    
+    def _parse_custom_fields(self, custom_fields: Dict) -> Dict:
+        """Extract description and requirements from custom fields."""
+        result = {}
+        
+        if 'details' in custom_fields:
+            for detail in custom_fields['details']:
+                name = detail.get('name', '').lower()
+                value = detail.get('value', '')
                 
-                logger.info(f"Added {len(jobs)} jobs for {company_name}")
-            
-        except Exception as e:
-            logger.error(f"Error processing company {company.get('company_name', 'Unknown')}: {e}")
-            continue
+                # Skip if value is None or not a string
+                if value and isinstance(value, str):
+                    # Remove HTML tags for cleaner text
+                    clean_value = BeautifulSoup(value, 'html.parser').get_text(separator='\n').strip()
+                    result[name] = clean_value
+        
+        return result
     
-    # Deduplicate jobs
-    deduplicated_jobs = deduplicate_jobs(existing_jobs)
+    def _safe_extract(self, element, selectors: List[str]) -> Optional[str]:
+        """Safely extract text from element using multiple selector attempts."""
+        for selector in selectors:
+            try:
+                if selector.startswith('.'):
+                    found = element.find(class_=selector[1:])
+                else:
+                    found = element.find(selector)
+                
+                if found:
+                    return found.get_text(strip=True)
+            except:
+                continue
+        return None
     
-    # Save jobs data
-    save_json(deduplicated_jobs, 'data/jobs_raw.json')
+    def _extract_link(self, element) -> Optional[str]:
+        """Extract job URL from element."""
+        link = element.find('a', href=True)
+        return link['href'] if link else None
     
-    # Update companies timestamps
-    update_companies_timestamp(companies, scraped_companies)
-    save_json(companies, 'data/companies.json')
     
-    logger.info(f"Job scraping completed. Found {total_jobs_found} total jobs from {len(scraped_companies)} companies")
-    
-    return deduplicated_jobs
-
-
-def run_scheduled_scraping():
-    """
-    Run job scraping on a schedule (every 3 minutes)
-    """
-    config = load_config()
-    logger = setup_logging()
-    schedule_interval = config['job_scraping']['schedule_interval']
-    
-    logger.info(f"Starting scheduled job scraping (every {schedule_interval} seconds)")
-    
-    while True:
-        try:
-            logger.info("Starting scheduled job scraping cycle")
-            scrape_all_jobs()
-            logger.info(f"Completed scraping cycle. Waiting {schedule_interval} seconds...")
-            time.sleep(schedule_interval)
-            
-        except KeyboardInterrupt:
-            logger.info("Job scraping stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Error in scheduled scraping: {e}")
-            logger.info(f"Waiting {schedule_interval} seconds before retry...")
-            time.sleep(schedule_interval)
-
 
 if __name__ == "__main__":
-    import sys
+    import os
+
+    print("Current working directory:", os.getcwd())
+    print("Files in this directory:", os.listdir())
+
+    # Then your load command:
+    with open('scripts/debug_lumenis.html', 'r', encoding='utf-8') as f:
+        html_content = f.read()
     
-    if len(sys.argv) > 1 and sys.argv[1] == "--schedule":
-        # Run in scheduled mode
-        run_scheduled_scraping()
-    else:
-        # Run once
-        print("Scraping jobs from all companies...")
-        jobs = scrape_all_jobs()
-        print(f"Scraping completed. Check data/jobs_raw.json for results.")
+
+    extractor = JobExtractor(html_content)
+    jobs = extractor.extract_jobs()
+    
+    # Print results
+    print(f"Found {len(jobs)} jobs:\n")
+    
+    for i, job in enumerate(jobs, 1):
+        print(f"Job {i}:")
+        print(f"  Title: {job.get('title')}")
+        print(f"  Department: {job.get('department')}")
+        print(f"  Location: {job.get('location')}")
+        print(f"  Type: {job.get('employment_type')}")
+        print(f"  Experience: {job.get('experience_level')}")
+        print(f"  Workplace: {job.get('workplace_type')}")
+        print(f"  URL: {job.get('url')}")
+        
+        # Print description if available
+        if isinstance(job.get('description'), dict):
+            if 'description' in job['description']:
+                print(f"  Description: {job['description']['description'][:200]}...")
+        
+        print()
+    
+    # Optionally save to JSON
+    with open('jobs.json', 'w', encoding='utf-8') as f:
+        json.dump(jobs, f, indent=2, ensure_ascii=False)
+    
+    print(f"Jobs saved to jobs.json")
+
+    # soup = BeautifulSoup(html_content, "html.parser")
+    # job_posting = soup.find('a', class_='positionItem')
+    
+    # for a in soup.select("a.positionItem"):
+    #     link = a.get("href")
+    #     position_id = link.split("/")[-1] if link else None
+    #     details = [li.get_text(strip=True) for li in a.select("ul.positionDetails li")]
+    #     experience = next((d for d in details if d in ["Intern", "Junior", "Senior"]), None)
+    #     employment = next((d for d in details if d in ["Full-time", "Part-time", "Contract"]), None)
+    #     print(position_id, link, experience, employment)
+        
+    
