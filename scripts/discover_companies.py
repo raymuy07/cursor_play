@@ -9,6 +9,8 @@ import json
 import time
 from typing import List, Dict
 from utils import load_config, setup_logging, deduplicate_companies
+from db_utils import SearchQueriesDB, initialize_database, SEARCH_QUERIES_DB
+from db_schema import get_search_queries_schema
 
 
 def discover_companies() -> List[Dict]:
@@ -17,6 +19,16 @@ def discover_companies() -> List[Dict]:
     """
     config = load_config()
     logger = setup_logging()
+    
+    # Initialize search_queries database if it doesn't exist
+    try:
+        initialize_database(SEARCH_QUERIES_DB, get_search_queries_schema())
+        logger.info("search_queries.db initialized/verified")
+    except Exception as e:
+        logger.warning(f"Could not initialize search_queries.db: {e}")
+    
+    # Initialize database connection
+    search_db = SearchQueriesDB()
     
     # Domains to search for job pages
     # For now only Comeet is supported, but we can add more later
@@ -39,7 +51,7 @@ def discover_companies() -> List[Dict]:
         
         try:
             # Search for job pages on this domain
-            domain_companies = search_domain_jobs(domain, config, logger)
+            domain_companies = search_domain_jobs(domain, config, logger, search_db)
             all_companies.extend(domain_companies)
             
         except Exception as e:
@@ -62,7 +74,7 @@ def discover_companies() -> List[Dict]:
     return unique_companies
 
 
-def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
+def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueriesDB = None) -> List[Dict]:
     """
     Search for job pages on a specific domain using Serper API
     """
@@ -113,7 +125,22 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
             
             if not search_results or 'organic' not in search_results:
                 logger.warning(f"No organic results found for {domain} page {page}")
+                # Log search with 0 results
+                if search_db:
+                    try:
+                        search_db.log_search(query, 'google_serper', 0)
+                    except Exception as e:
+                        logger.warning(f"Failed to log search query: {e}")
                 break
+            
+            # Log successful search to database
+            results_count = len(search_results.get('organic', []))
+            if search_db:
+                try:
+                    search_db.log_search(query, 'google_serper', results_count)
+                    logger.debug(f"Logged search query to database: {query} ({results_count} results)")
+                except Exception as e:
+                    logger.warning(f"Failed to log search query: {e}")
             
             # Process search results
             page_companies = process_search_results(search_results['organic'], domain, logger)
