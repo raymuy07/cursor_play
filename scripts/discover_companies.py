@@ -95,6 +95,7 @@ def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueri
     query = query_template.format(domain=domain)
     
     companies = []
+    total_results_count = 0  # Track total results across all pages
     
     # Search multiple pages
     for page in range(1, max_pages + 1):
@@ -125,22 +126,11 @@ def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueri
             
             if not search_results or 'organic' not in search_results:
                 logger.warning(f"No organic results found for {domain} page {page}")
-                # Log search with 0 results
-                if search_db:
-                    try:
-                        search_db.log_search(query, 'google_serper', 0)
-                    except Exception as e:
-                        logger.warning(f"Failed to log search query: {e}")
                 break
             
-            # Log successful search to database
-            results_count = len(search_results.get('organic', []))
-            if search_db:
-                try:
-                    search_db.log_search(query, 'google_serper', results_count)
-                    logger.debug(f"Logged search query to database: {query} ({results_count} results)")
-                except Exception as e:
-                    logger.warning(f"Failed to log search query: {e}")
+            # Count results from this page
+            page_results_count = len(search_results.get('organic', []))
+            total_results_count += page_results_count
             
             # Process search results
             page_companies = process_search_results(search_results['organic'], domain, logger)
@@ -160,6 +150,14 @@ def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueri
         except Exception as e:
             logger.error(f"Error processing {domain} page {page}: {e}")
             break
+    
+    # Log search query with total results count to database
+    if search_db:
+        try:
+            search_db.log_search(domain, query, 'google_serper', total_results_count)
+            logger.info(f"Logged search for {domain}: {total_results_count} total results collected")
+        except Exception as e:
+            logger.warning(f"Failed to log search query: {e}")
     
     return companies
 
