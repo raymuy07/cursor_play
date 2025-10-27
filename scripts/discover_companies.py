@@ -7,14 +7,12 @@ Discovers company job pages using Google dork queries via Serper API
 import requests
 import json
 import time
-import random
 import re
 from typing import List, Dict, Any, Optional
 from utils import (
     load_config,
     setup_logging,
     deduplicate_companies,
-    rate_limit_delay,
     save_json,
 )
 
@@ -54,7 +52,7 @@ def discover_companies() -> List[Dict]:
             logger.error(f"Error searching {domain}: {e}")
         
         # Rate limiting between domains
-        rate_limit_delay()
+        time.sleep(config['scraping']['rate_limit_delay'])
     
     # Load existing companies and merge with new ones
     existing_companies = load_existing_companies()
@@ -74,9 +72,6 @@ def search_domain_jobs(domain: str, config: Dict[str, Any], logger) -> List[Dict
     Search for job pages on a specific domain using Serper API
     """
     serper_api_key = config.get('serper_api_key')
-    if not serper_api_key or str(serper_api_key).startswith('${'):
-        logger.warning("SERPER_API_KEY not configured. Skipping Serper search for domain '%s'", domain)
-        return []
 
     # Get domain-specific template or use default
     domain_templates = config['google_dork']['domain_templates']
@@ -95,9 +90,6 @@ def search_domain_jobs(domain: str, config: Dict[str, Any], logger) -> List[Dict
     companies = []
     
     # Search multiple pages
-    timeout_seconds = config.get('scraping', {}).get('timeout', 30)
-    max_retries = int(config.get('scraping', {}).get('max_retries', 3))
-
     for page in range(1, max_pages + 1):
         logger.info(f"Searching page {page} for {domain}")
         
@@ -106,54 +98,23 @@ def search_domain_jobs(domain: str, config: Dict[str, Any], logger) -> List[Dict
             url = "https://google.serper.dev/search"
             
             # Create payload for Serper API (single request)
-            payload_obj = {
+            payload = json.dumps([{
                 "q": query,
                 "page": page
-            }
+            }])
             
             headers = {
                 'X-API-KEY': serper_api_key,
                 'Content-Type': 'application/json'
             }
             
-            # Make API request with retries and backoff
-            attempt = 0
-            response = None
-            while attempt < max_retries:
-                attempt += 1
-                try:
-                    response = requests.post(
-                        url,
-                        headers=headers,
-                        json=payload_obj,
-                        timeout=timeout_seconds,
-                    )
-                    response.raise_for_status()
-                    break
-                except requests.exceptions.HTTPError as http_err:
-                    status = getattr(http_err.response, 'status_code', None)
-                    if status in (429, 500, 502, 503, 504) and attempt < max_retries:
-                        backoff = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
-                        logger.warning(
-                            "Serper HTTP %s on attempt %s/%s for page %s; backing off %.2fs",
-                            status, attempt, max_retries, page, backoff
-                        )
-                        time.sleep(backoff)
-                        continue
-                    raise
-                except requests.exceptions.RequestException as req_err:
-                    if attempt < max_retries:
-                        backoff = (2 ** (attempt - 1)) + random.uniform(0, 0.5)
-                        logger.warning(
-                            "Serper request error on attempt %s/%s for page %s; backing off %.2fs: %s",
-                            attempt, max_retries, page, backoff, req_err
-                        )
-                        time.sleep(backoff)
-                        continue
-                    raise
+            # Make API request
+            response = requests.post(url, headers=headers, data=payload, timeout=30)
+            response.raise_for_status()
             
             # Parse response
             search_results = response.json()
+            search_results = search_results[0]
             
             if not search_results or 'organic' not in search_results:
                 logger.warning(f"No organic results found for {domain} page {page}")
@@ -169,7 +130,7 @@ def search_domain_jobs(domain: str, config: Dict[str, Any], logger) -> List[Dict
                 break
             
             # Rate limiting between pages
-            rate_limit_delay()
+            time.sleep(config['scraping']['rate_limit_delay'])
             
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed for {domain} page {page}: {e}")
