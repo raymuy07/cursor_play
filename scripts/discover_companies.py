@@ -8,15 +8,39 @@ import requests
 import json
 import time
 from typing import List, Dict
-from utils import load_config, setup_logging, deduplicate_companies
+from utils import load_config, setup_logging
+from db_utils import SearchQueriesDB, CompaniesDB, initialize_database, SEARCH_QUERIES_DB, COMPANIES_DB
+from db_schema import get_search_queries_schema, get_companies_schema
 
 
 def discover_companies() -> List[Dict]:
     """
     Discover company job pages using Google dork queries via Serper API
+    Returns list of all companies currently in the database
     """
     config = load_config()
     logger = setup_logging()
+    
+    # Initialize both databases if they don't exist
+    try:
+        initialize_database(SEARCH_QUERIES_DB, get_search_queries_schema())
+        logger.info("search_queries.db initialized/verified")
+    except Exception as e:
+        logger.warning(f"Could not initialize search_queries.db: {e}")
+    
+    try:
+        initialize_database(COMPANIES_DB, get_companies_schema())
+        logger.info("companies.db initialized/verified")
+    except Exception as e:
+        logger.warning(f"Could not initialize companies.db: {e}")
+    
+    # Initialize database connections
+    search_db = SearchQueriesDB()
+    companies_db = CompaniesDB()
+    
+    # Get existing company count before starting
+    existing_count = companies_db.count_companies()
+    logger.info(f"Starting discovery - {existing_count} companies already in database")
     
     # Domains to search for job pages
     # For now only Comeet is supported, but we can add more later
@@ -32,15 +56,15 @@ def discover_companies() -> List[Dict]:
         
     ]
     
-    all_companies = []
+    new_companies_count = 0
     
     for domain in domains:
         logger.info(f"Searching for jobs on {domain}")
         
         try:
-            # Search for job pages on this domain
-            domain_companies = search_domain_jobs(domain, config, logger)
-            all_companies.extend(domain_companies)
+            # Search for job pages on this domain and insert into database
+            discovered_count = search_domain_jobs(domain, config, logger, search_db, companies_db)
+            new_companies_count += discovered_count
             
         except Exception as e:
             logger.error(f"Error searching {domain}: {e}")
@@ -48,23 +72,19 @@ def discover_companies() -> List[Dict]:
         # Rate limiting between domains
         time.sleep(config['scraping']['rate_limit_delay'])
     
-    # Load existing companies and merge with new ones
-    existing_companies = load_existing_companies()
-    all_companies.extend(existing_companies)
+    # Get final count
+    final_count = companies_db.count_companies()
     
-    # Deduplicate and save
-    unique_companies = deduplicate_companies(all_companies)
+    logger.info(f"Discovery complete - Total companies in database: {final_count} (new: {new_companies_count})")
     
-    with open('data/companies.json', 'w') as f:
-        json.dump(unique_companies, f, indent=2)
-    
-    logger.info(f"Total companies: {len(unique_companies)} (existing: {len(existing_companies)}, new: {len(unique_companies) - len(existing_companies)})")
-    return unique_companies
+    # Return all companies from database
+    return companies_db.get_all_companies()
 
 
-def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
+def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueriesDB = None, companies_db: CompaniesDB = None) -> int:
     """
     Search for job pages on a specific domain using Serper API
+    Returns the count of new companies added to the database
     """
     serper_api_key = config['serper_api_key']
 
@@ -77,12 +97,13 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
         max_pages = domain_config['max_pages']
     else:
         logger.error(f"No specific template for {domain}")
-        return []
+        return 0
     
     # Construct the search query
     query = query_template.format(domain=domain)
     
-    companies = []
+    new_companies_count = 0
+    total_results_count = 0  # Track total results across all pages
     
     # Search multiple pages
     for page in range(1, max_pages + 1):
@@ -115,9 +136,13 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
                 logger.warning(f"No organic results found for {domain} page {page}")
                 break
             
-            # Process search results
-            page_companies = process_search_results(search_results['organic'], domain, logger)
-            companies.extend(page_companies)
+            # Count results from this page
+            page_results_count = len(search_results.get('organic', []))
+            total_results_count += page_results_count
+            
+            # Process search results and insert into database
+            page_new_count = process_search_results(search_results['organic'], domain, logger, companies_db)
+            new_companies_count += page_new_count
             
             # If we got fewer than 10 results, we've likely reached the end
             if len(search_results['organic']) < 10:
@@ -134,14 +159,23 @@ def search_domain_jobs(domain: str, config: Dict, logger) -> List[Dict]:
             logger.error(f"Error processing {domain} page {page}: {e}")
             break
     
-    return companies
+    # Log search query with total results count to database
+    if search_db:
+        try:
+            search_db.log_search(domain, query, 'google_serper', total_results_count)
+            logger.info(f"Logged search for {domain}: {total_results_count} total results collected, {new_companies_count} new companies added")
+        except Exception as e:
+            logger.warning(f"Failed to log search query: {e}")
+    
+    return new_companies_count
 
 
-def process_search_results(organic_results: List[Dict], domain: str, logger) -> List[Dict]:
+def process_search_results(organic_results: List[Dict], domain: str, logger, companies_db: CompaniesDB = None) -> int:
     """
-    Process search results and extract company information
+    Process search results, extract company information, and insert into database
+    Returns the count of new companies added
     """
-    companies = []
+    new_companies_count = 0
     
     for result in organic_results:
         try:
@@ -161,18 +195,25 @@ def process_search_results(organic_results: List[Dict], domain: str, logger) -> 
                     "domain": domain,
                     "job_page_url": clean_url,
                     "title": title,
-                    "discovered_at": time.time(),
-                    "last_scraped": None,
+                    "source": "google_serper"
                 }
                 
-                companies.append(company_data)
-                logger.debug(f"Found company: {company_name} at {clean_url}")
+                # Insert into database if companies_db is provided
+                if companies_db:
+                    company_id = companies_db.insert_company(company_data)
+                    if company_id:
+                        new_companies_count += 1
+                        logger.debug(f"Added new company: {company_name} at {clean_url}")
+                    else:
+                        logger.debug(f"Company already exists: {company_name} at {clean_url}")
+                else:
+                    logger.debug(f"Found company: {company_name} at {clean_url}")
             
         except Exception as e:
             logger.error(f"Error processing search result: {e}")
             continue
     
-    return companies
+    return new_companies_count
 
 
 def extract_company_name_from_title(title: str, domain: str) -> str:
@@ -216,17 +257,6 @@ def extract_company_name_from_title(title: str, domain: str) -> str:
         
     except Exception:
         return None
-
-
-def load_existing_companies() -> List[Dict]:
-    """
-    Load existing companies from companies.json
-    """
-    try:
-        with open('data/companies.json', 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
 
 
 def clean_job_page_url(url: str) -> str:

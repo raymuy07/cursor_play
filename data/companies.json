@@ -1,10 +1,18 @@
 [
   {
+    "company_name": "Ask-AI -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/askai/1A.00C",
+    "title": "Jobs at Ask-AI - Careers - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
     "company_name": "Beamr -",
     "domain": "comeet.com",
     "job_page_url": "https://www.comeet.com/jobs/beamr/A9.00B",
     "title": "Jobs at Beamr - Careers - Comeet",
-    "discovered_at": 1761140722.6151083,
+    "discovered_at": 1761584034.0663881,
     "last_scraped": null
   },
   {
@@ -12,55 +20,7 @@
     "domain": "comeet.com",
     "job_page_url": "https://www.comeet.com/jobs/dreamgroup/99.002",
     "title": "Jobs at Dream - Comeet",
-    "discovered_at": 1761140722.6151083,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Lumenis",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/lumenis/A1.00C",
-    "title": "Jobs at Lumenis - Comeet",
-    "discovered_at": 1761140722.6151083,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Kaltura -",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/kaltura/E2.00D",
-    "title": "Jobs at Kaltura - Careers - Comeet",
-    "discovered_at": 1761140722.6151083,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Ask-AI",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/askai/1A.00C",
-    "title": "Jobs at Ask-AI - Comeet",
-    "discovered_at": 1761140722.6151083,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Matrix Global",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/matrix-ifs/19.00F",
-    "title": "Jobs at Matrix Global - Comeet",
-    "discovered_at": 1761140722.6151083,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Firefly -",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/firefly/39.000",
-    "title": "Jobs at Firefly - Careers - Comeet",
-    "discovered_at": 1761140722.6160734,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Supercom -",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/supercom/46.00A",
-    "title": "Jobs at Supercom - Careers - Comeet",
-    "discovered_at": 1761140722.6160734,
+    "discovered_at": 1761584034.0663881,
     "last_scraped": null
   },
   {
@@ -68,7 +28,39 @@
     "domain": "comeet.com",
     "job_page_url": "https://www.comeet.com/jobs/tango/B7.007",
     "title": "Jobs at Tango - Comeet",
-    "discovered_at": 1761140722.6160734,
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "anecdotes",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/anecdotes/F9.00B",
+    "title": "Jobs at anecdotes - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Insycle",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/Insycle/D3.002",
+    "title": "Jobs at Insycle - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Lumenis",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/lumenis/A1.00C",
+    "title": "Jobs at Lumenis - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Kaltura -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/kaltura/E2.00D",
+    "title": "Jobs at Kaltura - Careers - Comeet",
+    "discovered_at": 1761584034.0663881,
     "last_scraped": null
   },
   {
@@ -76,6 +68,198 @@
     "domain": "comeet.com",
     "job_page_url": "https://www.comeet.com/jobs/Claroty/F2.004",
     "title": "Jobs at Claroty - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Explorium",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/explorium/B4.00E",
+    "title": "Jobs at Explorium - Comeet",
+    "discovered_at": 1761584034.0663881,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Firefly -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/firefly/39.000",
+    "title": "Jobs at Firefly - Careers - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Hive Collective -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/hivecollective/C9.00F",
+    "title": "Jobs at Hive Collective - Careers - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Maytronics",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/maytronics/E3.008",
+    "title": "Jobs at Maytronics - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Arrive AI Inc.",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/arriveai/5A.00D",
+    "title": "Jobs at Arrive AI Inc. - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Alma Observatory",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/almaobservatory/F5.001",
+    "title": "Jobs at Alma Observatory - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "ActiveFence",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/activefence/D5.005",
+    "title": "Jobs at ActiveFence - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Anchor Fintech -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/anchorfintech/87.00D",
+    "title": "Jobs at Anchor Fintech - Careers - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Justt",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/justt/36.001",
+    "title": "Jobs at Justt - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "ForSight Robotics",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/forsightrobotics/E9.008",
+    "title": "Jobs at ForSight Robotics - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Freightos",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/freightos/F0.000",
+    "title": "Jobs at Freightos - Comeet",
+    "discovered_at": 1761584036.9500408,
+    "last_scraped": null
+  },
+  {
+    "company_name": "IT Solutions Consulting LLC",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/itsolutions/B2.00F",
+    "title": "Jobs at IT Solutions Consulting LLC - Comeet",
+    "discovered_at": 1761583007.4745336,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Netafim",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/netafim/B7.002",
+    "title": "Jobs at Netafim - Comeet",
+    "discovered_at": 1761583007.4745336,
+    "last_scraped": null
+  },
+  {
+    "company_name": "OneStep -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/onestep/79.007",
+    "title": "Jobs at OneStep - Careers - Comeet",
+    "discovered_at": 1761583007.4745336,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Keter North America -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/keter-north-america/E3.001",
+    "title": "Jobs at Keter North America - Careers - Comeet",
+    "discovered_at": 1761583007.4755332,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Eitan Medical",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/eitanmedical/C6.00F",
+    "title": "Jobs at Eitan Medical - Comeet",
+    "discovered_at": 1761583007.4755332,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Pipl -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/pipl/22.008",
+    "title": "Jobs at Pipl - Careers - Comeet",
+    "discovered_at": 1761583007.4755332,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Primus Group -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/primusgroup/59.007",
+    "title": "Jobs at Primus Group - Careers - Comeet",
+    "discovered_at": 1761583007.4755332,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Coro",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/coro/08.00a",
+    "title": "Jobs at Coro - Comeet",
+    "discovered_at": 1761583119.4811225,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Matrix Global",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/matrix-ifs/19.00F",
+    "title": "Jobs at Matrix Global - Comeet",
+    "discovered_at": 1761583119.4811225,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Inspired HR",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/inspiredhr/7A.008",
+    "title": "Jobs at Inspired HR - Comeet",
+    "discovered_at": 1761583119.4811225,
+    "last_scraped": null
+  },
+  {
+    "company_name": "CapsLock",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/capslock/59.001",
+    "title": "Jobs at CapsLock - Comeet",
+    "discovered_at": 1761583119.4811225,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Flare",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/flare/36.00F",
+    "title": "Jobs at Flare - Comeet",
+    "discovered_at": 1761583119.4811225,
+    "last_scraped": null
+  },
+  {
+    "company_name": "Supercom -",
+    "domain": "comeet.com",
+    "job_page_url": "https://www.comeet.com/jobs/supercom/46.00A",
+    "title": "Jobs at Supercom - Careers - Comeet",
     "discovered_at": 1761140722.6160734,
     "last_scraped": null
   },
@@ -116,14 +300,6 @@
     "domain": "comeet.com",
     "job_page_url": "https://www.comeet.com/jobs/ceragon/d3.003",
     "title": "Jobs at Ceragon - Comeet",
-    "discovered_at": 1761140725.6755793,
-    "last_scraped": null
-  },
-  {
-    "company_name": "Netafim",
-    "domain": "comeet.com",
-    "job_page_url": "https://www.comeet.com/jobs/netafim/B7.002",
-    "title": "Jobs at Netafim - Comeet",
     "discovered_at": 1761140725.6755793,
     "last_scraped": null
   },
