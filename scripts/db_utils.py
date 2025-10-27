@@ -14,7 +14,7 @@ from contextlib import contextmanager
 # Database paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 SEARCH_QUERIES_DB = os.path.join(DATA_DIR, 'search_queries.db')
-COMPANIES_PAGES_DB = os.path.join(DATA_DIR, 'companies_pages.db')
+COMPANIES_DB = os.path.join(DATA_DIR, 'companies.db')
 
 
 def ensure_data_directory():
@@ -90,13 +90,14 @@ class SearchQueriesDB:
     def __init__(self, db_path: str = SEARCH_QUERIES_DB):
         self.db_path = db_path
     
-    def log_search(self, query: str, source: str, results_count: int = 0) -> int:
+    def log_search(self, domain: str, query: str, source: str, results_count: int = 0) -> int:
         """
         Log a search query to the database.
         
         Args:
+            domain: Domain being searched (e.g., 'comeet', 'lever')
             query: The search query string
-            source: Source of the search (e.g., 'google', 'indeed')
+            source: Source of the search (e.g., 'google_serper', 'indeed')
             results_count: Number of results returned
             
         Returns:
@@ -106,10 +107,10 @@ class SearchQueriesDB:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO search_queries (query, source, results_count)
-                VALUES (?, ?, ?)
+                INSERT INTO search_queries (domain, query, source, results_count)
+                VALUES (?, ?, ?, ?)
                 """,
-                (query, source, results_count)
+                (domain, query, source, results_count)
             )
             return cursor.lastrowid
     
@@ -135,12 +136,12 @@ class SearchQueriesDB:
             )
             return [dict(row) for row in cursor.fetchall()]
     
-    def get_search_by_query(self, query: str, source: str) -> Optional[Dict[str, Any]]:
+    def get_search_by_domain(self, domain: str, source: str = 'google_serper') -> Optional[Dict[str, Any]]:
         """
-        Get the most recent search for a specific query and source.
+        Get the most recent search for a specific domain.
         
         Args:
-            query: The search query string
+            domain: The domain (e.g., 'comeet', 'lever')
             source: Source of the search
             
         Returns:
@@ -151,216 +152,245 @@ class SearchQueriesDB:
             cursor.execute(
                 """
                 SELECT * FROM search_queries
-                WHERE query = ? AND source = ?
+                WHERE domain = ? AND source = ?
                 ORDER BY searched_at DESC
                 LIMIT 1
                 """,
-                (query, source)
+                (domain, source)
             )
             row = cursor.fetchone()
             return dict(row) if row else None
-
-
-class JobsDB:
-    """Interface for companies_pages.db (jobs table) operations"""
     
-    def __init__(self, db_path: str = COMPANIES_PAGES_DB):
-        self.db_path = db_path
-    
-    def insert_job(self, job_data: Dict[str, Any]) -> Optional[int]:
+    def get_domains_to_search(self, max_age_hours: int = 24) -> List[str]:
         """
-        Insert a new job into the database.
-        Handles duplicate prevention via job_hash and URL uniqueness.
+        Get list of domains that haven't been searched recently.
         
         Args:
-            job_data: Dictionary containing job information
+            max_age_hours: Consider domains not searched in this many hours
+            
+        Returns:
+            List of domain names that need to be searched
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT DISTINCT domain 
+                FROM search_queries
+                WHERE searched_at < datetime('now', '-' || ? || ' hours')
+                ORDER BY searched_at ASC
+                """,
+                (max_age_hours,)
+            )
+            return [row['domain'] for row in cursor.fetchall()]
+
+
+class CompaniesDB:
+    """Interface for companies.db operations"""
+    
+    def __init__(self, db_path: str = COMPANIES_DB):
+        self.db_path = db_path
+    
+    def insert_company(self, company_data: Dict[str, Any]) -> Optional[int]:
+        """
+        Insert a new company into the database.
+        Handles duplicate prevention via job_page_url uniqueness.
+        
+        Args:
+            company_data: Dictionary containing company information
+                Required: company_name, domain, job_page_url
+                Optional: title, source
             
         Returns:
             ID of the inserted record, or None if duplicate
         """
-        # Generate job hash if not provided
-        if 'job_hash' not in job_data:
-            job_data['job_hash'] = generate_job_hash(
-                job_data.get('url', ''),
-                job_data.get('title', '')
-            )
-        
         try:
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Prepare the INSERT statement
-                columns = [
-                    'job_hash', 'url', 'title', 'company', 'description',
-                    'source', 'department', 'location', 'employment_type',
-                    'experience_level', 'workplace_type', 'uid', 
-                    'company_name', 'last_updated'
-                ]
-                
-                values = [job_data.get(col) for col in columns]
-                placeholders = ','.join(['?' for _ in columns])
-                
                 cursor.execute(
-                    f"""
-                    INSERT INTO jobs ({','.join(columns)})
-                    VALUES ({placeholders})
+                    """
+                    INSERT INTO companies (company_name, domain, job_page_url, title, source)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
-                    values
+                    (
+                        company_data.get('company_name'),
+                        company_data.get('domain'),
+                        company_data.get('job_page_url'),
+                        company_data.get('title'),
+                        company_data.get('source', 'google_serper')
+                    )
                 )
                 return cursor.lastrowid
                 
         except sqlite3.IntegrityError:
-            # Duplicate job (hash or URL already exists)
+            # Duplicate company (job_page_url already exists)
             return None
     
-    def update_job_checked(self, job_hash: str) -> bool:
+    def update_last_scraped(self, job_page_url: str) -> bool:
         """
-        Update the last_checked timestamp for a job.
+        Update the last_scraped timestamp for a company.
         
         Args:
-            job_hash: Hash of the job to update
+            job_page_url: URL of the company's job page
             
         Returns:
-            True if job was updated, False otherwise
+            True if company was updated, False otherwise
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                UPDATE jobs
-                SET last_checked = CURRENT_TIMESTAMP
-                WHERE job_hash = ?
+                UPDATE companies
+                SET last_scraped = CURRENT_TIMESTAMP
+                WHERE job_page_url = ?
                 """,
-                (job_hash,)
+                (job_page_url,)
             )
             return cursor.rowcount > 0
     
-    def mark_job_inactive(self, job_hash: str) -> bool:
+    def mark_company_inactive(self, job_page_url: str) -> bool:
         """
-        Mark a job as inactive (no longer available).
+        Mark a company as inactive (page no longer available).
         
         Args:
-            job_hash: Hash of the job to mark inactive
+            job_page_url: URL of the company's job page
             
         Returns:
-            True if job was updated, False otherwise
+            True if company was updated, False otherwise
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                UPDATE jobs
-                SET is_active = 0, last_checked = CURRENT_TIMESTAMP
-                WHERE job_hash = ?
+                UPDATE companies
+                SET is_active = 0
+                WHERE job_page_url = ?
                 """,
-                (job_hash,)
+                (job_page_url,)
             )
             return cursor.rowcount > 0
     
-    def get_job_by_hash(self, job_hash: str) -> Optional[Dict[str, Any]]:
+    def get_company_by_url(self, job_page_url: str) -> Optional[Dict[str, Any]]:
         """
-        Get a job by its hash.
+        Get a company by its job page URL.
         
         Args:
-            job_hash: Hash of the job
+            job_page_url: URL of the company's job page
             
         Returns:
-            Job record as dictionary or None if not found
+            Company record as dictionary or None if not found
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT * FROM jobs WHERE job_hash = ?",
-                (job_hash,)
+                "SELECT * FROM companies WHERE job_page_url = ?",
+                (job_page_url,)
             )
             row = cursor.fetchone()
             return dict(row) if row else None
     
-    def get_job_by_url(self, url: str) -> Optional[Dict[str, Any]]:
+    def get_companies_by_domain(self, domain: str, active_only: bool = True) -> List[Dict[str, Any]]:
         """
-        Get a job by its URL.
+        Get all companies for a specific domain.
         
         Args:
-            url: Job URL
+            domain: Domain to filter by (e.g., 'comeet', 'lever')
+            active_only: If True, only return active companies
             
         Returns:
-            Job record as dictionary or None if not found
-        """
-        with get_db_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM jobs WHERE url = ?",
-                (url,)
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-    
-    def get_active_jobs(self, company: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """
-        Get all active jobs, optionally filtered by company.
-        
-        Args:
-            company: Optional company filter
-            limit: Optional limit on number of results
-            
-        Returns:
-            List of job records as dictionaries
+            List of company records as dictionaries
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
-            query = "SELECT * FROM jobs WHERE is_active = 1"
-            params = []
+            query = "SELECT * FROM companies WHERE domain = ?"
+            params = [domain]
             
-            if company:
-                query += " AND company = ?"
-                params.append(company)
+            if active_only:
+                query += " AND is_active = 1"
             
-            query += " ORDER BY fetched_at DESC"
-            
-            if limit:
-                query += " LIMIT ?"
-                params.append(limit)
+            query += " ORDER BY discovered_at DESC"
             
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
     
-    def get_all_jobs(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_companies_to_scrape(self, limit: Optional[int] = None, max_age_hours: int = 168) -> List[Dict[str, Any]]:
         """
-        Get all jobs (active and inactive).
+        Get companies that need to be scraped (never scraped or not scraped recently).
         
         Args:
             limit: Optional limit on number of results
+            max_age_hours: Consider companies not scraped in this many hours (default 7 days)
             
         Returns:
-            List of job records as dictionaries
+            List of company records as dictionaries
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
-            query = "SELECT * FROM jobs ORDER BY fetched_at DESC"
+            query = """
+                SELECT * FROM companies 
+                WHERE is_active = 1 
+                AND (last_scraped IS NULL OR last_scraped < datetime('now', '-' || ? || ' hours'))
+                ORDER BY last_scraped ASC NULLS FIRST
+            """
+            
+            if limit:
+                query += f" LIMIT {limit}"
+            
+            cursor.execute(query, (max_age_hours,))
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_all_companies(self, active_only: bool = True, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get all companies.
+        
+        Args:
+            active_only: If True, only return active companies
+            limit: Optional limit on number of results
+            
+        Returns:
+            List of company records as dictionaries
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM companies"
+            if active_only:
+                query += " WHERE is_active = 1"
+            
+            query += " ORDER BY discovered_at DESC"
+            
             if limit:
                 query += f" LIMIT {limit}"
             
             cursor.execute(query)
             return [dict(row) for row in cursor.fetchall()]
     
-    def count_jobs(self, active_only: bool = True) -> int:
+    def count_companies(self, domain: Optional[str] = None, active_only: bool = True) -> int:
         """
-        Count total number of jobs.
+        Count total number of companies.
         
         Args:
-            active_only: If True, count only active jobs
+            domain: Optional domain filter
+            active_only: If True, count only active companies
             
         Returns:
-            Number of jobs
+            Number of companies
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
-            query = "SELECT COUNT(*) FROM jobs"
-            if active_only:
-                query += " WHERE is_active = 1"
+            query = "SELECT COUNT(*) FROM companies WHERE 1=1"
+            params = []
             
-            cursor.execute(query)
+            if active_only:
+                query += " AND is_active = 1"
+            
+            if domain:
+                query += " AND domain = ?"
+                params.append(domain)
+            
+            cursor.execute(query, params)
             return cursor.fetchone()[0]

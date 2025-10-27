@@ -11,13 +11,13 @@ import logging
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.db_schema import get_search_queries_schema, get_jobs_schema
+from scripts.db_schema import get_search_queries_schema, get_companies_schema
 from scripts.db_utils import (
     initialize_database,
     SEARCH_QUERIES_DB,
-    COMPANIES_PAGES_DB,
+    COMPANIES_DB,
     SearchQueriesDB,
-    JobsDB
+    CompaniesDB
 )
 
 
@@ -43,7 +43,7 @@ def init_search_queries_db():
     
     # Test the database
     db = SearchQueriesDB()
-    test_id = db.log_search("test_query", "test_source", 0)
+    test_id = db.log_search("comeet", "site:comeet.com jobs", "google_serper", 10)
     logger.info(f"  - Test record inserted with ID: {test_id}")
     
     recent = db.get_recent_searches(1)
@@ -52,43 +52,43 @@ def init_search_queries_db():
     return True
 
 
-def init_companies_pages_db():
-    """Initialize companies_pages.db (jobs table)"""
+def init_companies_db():
+    """Initialize companies.db"""
     logger = setup_simple_logging()
     
-    logger.info(f"Initializing companies_pages.db at {COMPANIES_PAGES_DB}")
+    logger.info(f"Initializing companies.db at {COMPANIES_DB}")
     
-    schema = get_jobs_schema()
-    initialize_database(COMPANIES_PAGES_DB, schema)
+    schema = get_companies_schema()
+    initialize_database(COMPANIES_DB, schema)
     
-    logger.info("✓ companies_pages.db initialized successfully")
+    logger.info("✓ companies.db initialized successfully")
     
     # Test the database
-    db = JobsDB()
+    db = CompaniesDB()
     
-    # Try inserting a test job
-    test_job = {
-        'url': 'https://test.com/job/123',
-        'title': 'Test Software Engineer',
-        'company': 'Test Company',
-        'source': 'test',
-        'description': 'Test job description',
+    # Try inserting a test company
+    test_company = {
+        'company_name': 'Test Company',
+        'domain': 'comeet',
+        'job_page_url': 'https://www.comeet.com/jobs/testcompany/TEST.001',
+        'title': 'Jobs at Test Company - Comeet',
+        'source': 'google_serper'
     }
     
-    test_id = db.insert_job(test_job)
+    test_id = db.insert_company(test_company)
     if test_id:
-        logger.info(f"  - Test job inserted with ID: {test_id}")
+        logger.info(f"  - Test company inserted with ID: {test_id}")
         
         # Try to insert duplicate (should fail gracefully)
-        duplicate_id = db.insert_job(test_job)
+        duplicate_id = db.insert_company(test_company)
         if duplicate_id is None:
             logger.info("  - Duplicate prevention working correctly")
         
-        # Retrieve the job
-        job = db.get_job_by_url(test_job['url'])
-        logger.info(f"  - Test job retrieved: {job['title'] if job else 'None'}")
+        # Retrieve the company
+        company = db.get_company_by_url(test_company['job_page_url'])
+        logger.info(f"  - Test company retrieved: {company['company_name'] if company else 'None'}")
     else:
-        logger.warning("  - Test job insertion failed (may already exist)")
+        logger.warning("  - Test company insertion failed (may already exist)")
     
     return True
 
@@ -113,13 +113,13 @@ def main():
         print(f"   ✗ Failed: {e}\n")
         return False
     
-    # Initialize companies_pages.db
-    print("2. Initializing companies_pages.db...")
+    # Initialize companies.db
+    print("2. Initializing companies.db...")
     try:
-        init_companies_pages_db()
-        print("   ✓ companies_pages.db ready\n")
+        init_companies_db()
+        print("   ✓ companies.db ready\n")
     except Exception as e:
-        logger.error(f"Failed to initialize companies_pages.db: {e}")
+        logger.error(f"Failed to initialize companies.db: {e}")
         print(f"   ✗ Failed: {e}\n")
         return False
     
@@ -128,7 +128,7 @@ def main():
     print("=" * 60)
     print(f"\nDatabase locations:")
     print(f"  - {SEARCH_QUERIES_DB}")
-    print(f"  - {COMPANIES_PAGES_DB}")
+    print(f"  - {COMPANIES_DB}")
     print()
     
     logger.info("Database initialization complete")
