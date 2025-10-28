@@ -1,6 +1,8 @@
 # Job Hunter
 
-A small, personal project to discover, scrape and score job listings for small companies hosted on Comeet (and similar providers). The pipeline is implemented in **Python** and orchestrated with **cron**. This README documents goals, architecture, installation, usage, data formats, and operational notes.
+A small, personal project to discover, scrape and score job listings for small companies hosted on Comeet (and similar providers). The pipeline is implemented in **Python** with **SQLite** for data storage and orchestrated with **cron**. This README documents goals, architecture, installation, usage, data formats, and operational notes.
+
+**Current Status**: Phase 1 complete - Company discovery migrated to SQLite. Job storage (Phase 2) coming next.
 
 ---
 
@@ -20,43 +22,59 @@ A small, personal project to discover, scrape and score job listings for small c
 The project is split into three modules:
 
 1. **Source discovery** (`discover_companies.py`)
-   - Run the Google dork using Playwright to gather search result links.
+   - Run Google searches using Serper API to gather company job page links.
    - Normalize and deduplicate company job page URLs.
-   - Save results into `data/companies.json`.
+   - **Store results in SQLite** (`data/companies.db`) with automatic duplicate prevention.
+   - Track search queries in `data/search_queries.db` to avoid redundant searches.
 
 2. **Job extraction** (`scrape_jobs.py`)
    - For each company page, fetch the page and extract job metadata.
-   - Use lightweight scraping (requests + BeautifulSoup) where possible; fall back to Playwright only if JS rendering is required.
-   - Save raw results into `data/jobs_raw.json` and a filtered/normalized form in `data/jobs_filtered.json`.
+   - Use lightweight scraping (requests + BeautifulSoup) for parsing.
+   - Currently saves to JSON (`data/jobs_raw.json` and `data/jobs_filtered.json`).
+   - **Phase 2**: Will migrate to SQLite jobs database.
 
-3. **Scoring & delivery** (`score_jobs.py`, `send_digest.py`)
+3. **Scoring & delivery** (`score_jobs.py`, `send_digest.py`) [Planned]
    - Apply a scoring function (AI + rules) that ranks jobs according to your skills and preferences.
    - Keep a job history / seen-set to avoid duplicates in daily digests.
    - Send daily digest via Telegram, email, or another channel.
 
 Scheduling and orchestration are handled by `cron` jobs.
 
+### Data Storage Architecture
+
+**Current (Hybrid)**:
+- **SQLite databases** (Phase 1 ✅):
+  - `data/companies.db` - Company job pages and metadata
+  - `data/search_queries.db` - Search history and tracking
+- **JSON files** (Phase 2 migration pending):
+  - `data/jobs_raw.json` - Raw job listings
+  - `data/jobs_filtered.json` - Filtered jobs
+
 ---
 
-## Directory structure (suggested)
+## Directory structure
 
 ```
 job-hunter/
 ├── README.md
 ├── data/
-│   ├── companies.json          # deduplicated list of company job pages
-│   ├── jobs_raw.json           # raw scrape outputs
-│   ├── jobs_filtered.json      # normalized & filtered jobs
-│   └── seen_jobs.db            # optional SQLite or JSON of seen job IDs
+│   ├── companies.db            # SQLite: company job pages (Phase 1 ✅)
+│   ├── search_queries.db       # SQLite: search history (Phase 1 ✅)
+│   ├── jobs_raw.json           # raw scrape outputs (Phase 2: migrate to SQLite)
+│   └── jobs_filtered.json      # normalized & filtered jobs
 ├── scripts/
-│   ├── discover_companies.py
-│   ├── scrape_jobs.py
-│   ├── score_jobs.py
-│   ├── send_digest.py
-│   └── utils.py                # helpers (dedup, http client wrapper, logging)
-├── workflows/                  # optional exports (n8n later if desired)
+│   ├── discover_companies.py   # Company discovery (SQLite integrated ✅)
+│   ├── scrape_jobs.py          # Job scraping (currently JSON)
+│   ├── filter_jobs.py          # Job filtering
+│   ├── db_schema.py            # Database schemas
+│   ├── db_utils.py             # Database utilities (CompaniesDB, SearchQueriesDB)
+│   ├── init_databases.py       # Database initialization
+│   ├── utils.py                # General helpers
+│   └── test_*.py               # Test scripts
+├── tests/
+│   └── fixtures/               # Test HTML files
 ├── requirements.txt
-├── config.yaml                 # scheduler, thresholds, API keys, scraping rules
+├── config.yaml                 # API keys, scraping rules (not in repo)
 └── logs/
     └── jobhunter.log
 ```
@@ -66,23 +84,44 @@ job-hunter/
 ## Prerequisites
 
 - Python 3.10+ (recommended)
-- Node & Playwright (only for `discover_companies.py` and any JS-rendered pages)
-- pip packages from `requirements.txt` (requests, beautifulsoup4, playwright, pydantic, sqlite3 or tinydb, openai or other AI client, python-telegram-bot or requests for webhook delivery)
+- SQLite3 (included with Python)
+- pip packages from `requirements.txt`
 
-Example `requirements.txt` minimal:
+### Installation
 
-```
-playwright
-requests
-beautifulsoup4
-pydantic
-python-dotenv
-openai
-python-telegram-bot
-APScheduler
-```
+1. **Clone the repository**
+   ```bash
+   git clone <repo-url>
+   cd job-hunter
+   ```
 
-(Install Playwright browsers after installing the package: `playwright install`)
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**
+   Create a `.env` file with your API keys:
+   ```bash
+   SERPER_API_KEY=your_serper_key_here
+   OPENAI_API_KEY=your_openai_key_here
+   TELEGRAM_BOT_TOKEN=your_telegram_token_here
+   TELEGRAM_CHAT_ID=your_chat_id_here
+   ```
+
+4. **Initialize databases**
+   ```bash
+   python scripts/init_databases.py
+   ```
+   
+   This creates:
+   - `data/companies.db` - Company pages database
+   - `data/search_queries.db` - Search tracking database
+
+5. **Verify setup**
+   ```bash
+   python scripts/test_companies_db.py
+   ```
 
 ---
 
@@ -114,33 +153,77 @@ Keep API keys in environment variables or a `.env` file and never commit them.
 
 ## Data formats
 
-### `companies.json`
+### SQLite Databases (Phase 1 ✅)
 
-An array of unique company job-page URLs, e.g.:
+#### `companies.db`
+Stores company job pages discovered from searches.
 
-```json
-[
-  "https://company1.com/jobs",
-  "https://company2.com/careers"
-]
+**Schema**:
+```sql
+CREATE TABLE companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_name TEXT NOT NULL,
+    domain TEXT NOT NULL,              -- 'comeet', 'lever', etc.
+    job_page_url TEXT UNIQUE NOT NULL, -- Main job listings page
+    title TEXT,                        -- Page title from search
+    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_scraped TIMESTAMP,            -- When jobs were last scraped
+    is_active BOOLEAN DEFAULT 1,
+    source TEXT DEFAULT 'google_serper'
+);
 ```
 
-### `jobs_raw.json`
+**Usage**:
+```python
+from scripts.db_utils import CompaniesDB
 
-Raw entries as extracted from pages. Example entry:
+db = CompaniesDB()
+companies = db.get_all_companies()
+to_scrape = db.get_companies_to_scrape(limit=10)
+```
+
+#### `search_queries.db`
+Tracks search queries to avoid redundant API calls.
+
+**Schema**:
+```sql
+CREATE TABLE search_queries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT NOT NULL,              -- 'comeet', 'lever', etc.
+    query TEXT NOT NULL,               -- The search query
+    source TEXT NOT NULL,              -- 'google_serper'
+    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    results_count INTEGER DEFAULT 0
+);
+```
+
+**Usage**:
+```python
+from scripts.db_utils import SearchQueriesDB
+
+db = SearchQueriesDB()
+db.log_search("comeet", "site:comeet.com jobs", "google_serper", 15)
+domains_to_search = db.get_domains_to_search(max_age_hours=24)
+```
+
+### JSON Files (Phase 2 - Will migrate to SQLite)
+
+#### `jobs_raw.json`
+Raw job entries as extracted from company pages:
 
 ```json
 {
-  "company_url": "https://company1.com/jobs",
-  "fetched_at": "2025-10-21T12:00:00+03:00",
-  "html_snippet": "<div class=\"job-listing\">...</div>",
-  "job_id": "comeet-12345"
+  "title": "Backend Engineer",
+  "company_name": "Company Name",
+  "department": "Engineering",
+  "location": "Tel Aviv, IL",
+  "url": "https://...",
+  "url_hash": "abc123..."
 }
 ```
 
-### `jobs_filtered.json`
-
-Normalized job entries used for scoring:
+#### `jobs_filtered.json`
+Filtered and normalized job entries:
 
 ```json
 {
@@ -255,12 +338,27 @@ Daily matched jobs (3)
 
 ---
 
-## Future improvements
+## Roadmap
 
-- Add a simple web UI to browse matched jobs.
-- Replace JSON files with a small SQLite DB for more robust queries.
-- Export n8n workflows to orchestrate and monitor pipelines visually.
-- Add credentials manager (Vault) for secrets.
+### ✅ Phase 1 Complete: Company Discovery
+- SQLite storage for companies
+- Search query tracking
+- Automatic duplicate prevention
+- Company discovery via Serper API
+
+### 🚧 Phase 2 Next: Jobs Database
+- Design jobs.db schema
+- Create JobsDB utility class
+- Migrate jobs from JSON to SQLite
+- Link jobs to companies
+- Job status tracking (new, seen, applied)
+
+### 📋 Future improvements
+- Add a simple web UI to browse matched jobs
+- Implement AI-powered job scoring
+- Set up automated daily digests
+- Export n8n workflows to orchestrate and monitor pipelines visually
+- Add credentials manager (Vault) for secrets
 
 ---
 
