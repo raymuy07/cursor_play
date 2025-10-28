@@ -3,16 +3,18 @@ import re
 import hashlib
 import os
 import sys
+import time
+import logging
 from typing import List, Dict, Optional
+from datetime import datetime
+import requests
 from bs4 import BeautifulSoup
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scripts.utils import setup_logging
-# TODO: Phase 2 - Add JobsDB when implementing jobs database
-# from scripts.db_utils import JobsDB, initialize_database
-# from scripts.db_schema import get_jobs_schema
-from scripts.db_utils import generate_job_hash
+
+# Database access for companies and scrape scheduling
+from scripts.db_utils import CompaniesDB
 
 
 class JobExtractor:
@@ -256,21 +258,9 @@ def merge_jobs(new_jobs: List[Dict], existing_jobs: List[Dict]) -> List[Dict]:
 
 def save_jobs_to_db(jobs: List[Dict], source: str = 'comeet') -> tuple[int, int]:
     """
-    Save jobs to the database.
-    
-    TODO: Phase 2 - Implement when JobsDB is created
-    Currently returns 0, 0 to maintain compatibility.
-    
-    Args:
-        jobs: List of job dictionaries
-        source: Source of the jobs (e.g., 'comeet', 'google_api')
-        
-    Returns:
-        Tuple of (inserted_count, duplicate_count)
+    Placeholder for Phase 2 JobsDB integration.
+    Currently returns (0, 0) and does nothing.
     """
-    # Phase 2: Jobs database not yet implemented
-    # For now, jobs are stored in JSON files only
-    print("Note: Jobs database (Phase 2) not yet implemented. Jobs saved to JSON only.")
     return 0, 0
 
 
@@ -291,85 +281,351 @@ def load_existing_jobs(filepath: str) -> List[Dict]:
     return []
 
 
+# ----------------------
+# Scraping Orchestration
+# ----------------------
+
+DEFAULT_SCRAPING_CONFIG = {
+    # How stale a company's last_scraped can be before re-scraping (hours)
+    'max_age_hours': 24,
+    # Maximum companies to scrape in one run (anti-ban safety)
+    'max_companies_per_run': 5,
+    # Delay between HTTP requests in seconds (rate limit)
+    'rate_limit_delay': 2,
+    # HTTP client settings
+    'request_timeout': 20,
+    'user_agent': 'JobHunterBot/1.0 (+https://example.com)'
+}
+
+
+def setup_simple_logging() -> logging.Logger:
+    """Setup basic logging without external config dependencies."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    return logging.getLogger('scrape_jobs')
+
+
+def get_scraping_config() -> Dict:
+    """
+    Return scraping config. If a project config exists (config.yaml via scripts.utils),
+    it will be used; otherwise fallback to sane defaults.
+    """
+    # Lazy import to avoid hard dependency on PyYAML in environments without it
+    try:
+        from scripts.utils import load_config  # type: ignore
+        cfg = load_config()
+        scraping = cfg.get('scraping', {}) if isinstance(cfg, dict) else {}
+        return {
+            'max_age_hours': scraping.get('max_age_hours', DEFAULT_SCRAPING_CONFIG['max_age_hours']),
+            'max_companies_per_run': scraping.get('max_companies_per_run', DEFAULT_SCRAPING_CONFIG['max_companies_per_run']),
+            'rate_limit_delay': scraping.get('rate_limit_delay', DEFAULT_SCRAPING_CONFIG['rate_limit_delay']),
+            'request_timeout': scraping.get('request_timeout', DEFAULT_SCRAPING_CONFIG['request_timeout']),
+            'user_agent': scraping.get('user_agent', DEFAULT_SCRAPING_CONFIG['user_agent']),
+        }
+    except Exception:
+        return DEFAULT_SCRAPING_CONFIG.copy()
+
+
+def fetch_html(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
+    """Fetch HTML content for a given URL using requests."""
+    headers = {
+        'User-Agent': user_agent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'close',
+    }
+    try:
+        sess = session or requests.Session()
+        resp = sess.get(url, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.text
+        return None
+    except requests.RequestException:
+        return None
+
+
+def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
+    """Ensure jobs include company_name and source from the company record when missing."""
+    for job in jobs:
+        if not job.get('company_name'):
+            job['company_name'] = company.get('company_name')
+        if not job.get('source') and company.get('domain'):
+            job['source'] = company.get('domain')
+    return jobs
+
+
+def run_scrape() -> None:
+    """Main scraping workflow orchestrating DB scheduling and rate limiting."""
+    logger = setup_simple_logging()
+    config = get_scraping_config()
+
+    jobs_json_path = os.path.join('data', 'jobs_raw.json')
+    existing_jobs = load_existing_jobs(jobs_json_path)
+    logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
+
+    db = CompaniesDB()
+    # Attempt DB-side selection; if not supported (e.g., NULLS FIRST), fall back to Python filtering
+    try:
+        to_scrape = db.get_companies_to_scrape(
+            limit=config['max_companies_per_run'],
+            max_age_hours=config['max_age_hours'],
+        )
+    except Exception as exc:
+        logger.warning(f"DB-side scheduling query failed ({exc}); falling back to client-side filtering")
+        all_companies = db.get_all_companies(active_only=True)
+        cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
+
+        def parse_ts(ts: Optional[str]) -> Optional[float]:
+            if not ts:
+                return None
+            try:
+                # Support 'YYYY-MM-DD HH:MM:SS[.ffffff]'
+                return datetime.fromisoformat(ts).timestamp()
+            except Exception:
+                try:
+                    from time import strptime, mktime
+                    return mktime(time.strptime(ts.split('.')[0], '%Y-%m-%d %H:%M:%S'))
+                except Exception:
+                    return None
+
+        def needs_scrape(company: Dict) -> bool:
+            ts = parse_ts(company.get('last_scraped'))
+            return ts is None or ts < cutoff
+
+        candidates = [c for c in all_companies if needs_scrape(c)]
+        # Sort: never-scraped first, then oldest scraped
+        candidates.sort(key=lambda c: (c.get('last_scraped') is not None, c.get('last_scraped') or ''))
+        to_scrape = candidates[: config['max_companies_per_run']]
+
+    if not to_scrape:
+        logger.info("No companies require scraping at this time.")
+        return
+
+    logger.info(f"Preparing to scrape {len(to_scrape)} company pages")
+
+    session = requests.Session()
+    new_jobs_total: List[Dict] = []
+
+    for idx, company in enumerate(to_scrape, start=1):
+        url = company.get('job_page_url')
+        if not url:
+            continue
+
+        logger.info(f"[{idx}/{len(to_scrape)}] Fetching {url}")
+        html = fetch_html(url, session, config['request_timeout'], config['user_agent'])
+        if not html:
+            logger.warning(f"Failed to fetch HTML from {url}")
+            # Respect rate limit even on failure
+            time.sleep(config['rate_limit_delay'])
+            continue
+
+        extractor = JobExtractor(html)
+        extracted = extractor.extract_jobs() or []
+        extracted = enrich_jobs_with_company(extracted, company)
+        extracted = add_hash_to_jobs(extracted)
+
+        if extracted:
+            logger.info(f"Extracted {len(extracted)} jobs from {url}")
+        else:
+            logger.info(f"No jobs found for {url}")
+
+        # Merge into in-memory accumulator first, then persist below
+        new_jobs_total.extend(extracted)
+
+        # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
+        try:
+            db.update_last_scraped(url)
+        except Exception:
+            logger.warning(f"Could not update last_scraped for {url}")
+
+        # Rate limit between requests
+        time.sleep(config['rate_limit_delay'])
+
+    # Merge and save once for the entire run
+    if new_jobs_total:
+        merged_jobs = merge_jobs(new_jobs_total, existing_jobs)
+        jobs_added = len(merged_jobs) - len(existing_jobs)
+        with open(jobs_json_path, 'w', encoding='utf-8') as f:
+            json.dump(merged_jobs, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved {len(merged_jobs)} jobs to {jobs_json_path} (+{jobs_added} new)")
+    else:
+        logger.info("No new jobs to save.")
+
+
+# ----------------------
+# Scraping Orchestration
+# ----------------------
+
+DEFAULT_SCRAPING_CONFIG = {
+    # How stale a company's last_scraped can be before re-scraping (hours)
+    'max_age_hours': 24,
+    # Maximum companies to scrape in one run (anti-ban safety)
+    'max_companies_per_run': 5,
+    # Delay between HTTP requests in seconds (rate limit)
+    'rate_limit_delay': 2,
+    # HTTP client settings
+    'request_timeout': 20,
+    'user_agent': 'JobHunterBot/1.0 (+https://example.com)'
+}
+
+
+def setup_simple_logging() -> logging.Logger:
+    """Setup basic logging without external config dependencies."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    return logging.getLogger('scrape_jobs')
+
+
+def get_scraping_config() -> Dict:
+    """
+    Return scraping config. If a project config exists (config.yaml via scripts.utils),
+    it will be used; otherwise fallback to sane defaults.
+    """
+    # Lazy import to avoid hard dependency on PyYAML in environments without it
+    try:
+        from scripts.utils import load_config  # type: ignore
+        cfg = load_config()
+        scraping = cfg.get('scraping', {}) if isinstance(cfg, dict) else {}
+        return {
+            'max_age_hours': scraping.get('max_age_hours', DEFAULT_SCRAPING_CONFIG['max_age_hours']),
+            'max_companies_per_run': scraping.get('max_companies_per_run', DEFAULT_SCRAPING_CONFIG['max_companies_per_run']),
+            'rate_limit_delay': scraping.get('rate_limit_delay', DEFAULT_SCRAPING_CONFIG['rate_limit_delay']),
+            'request_timeout': scraping.get('request_timeout', DEFAULT_SCRAPING_CONFIG['request_timeout']),
+            'user_agent': scraping.get('user_agent', DEFAULT_SCRAPING_CONFIG['user_agent']),
+        }
+    except Exception:
+        return DEFAULT_SCRAPING_CONFIG.copy()
+
+
+def fetch_html(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
+    """Fetch HTML content for a given URL using requests."""
+    headers = {
+        'User-Agent': user_agent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'close',
+    }
+    try:
+        sess = session or requests.Session()
+        resp = sess.get(url, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.text
+        return None
+    except requests.RequestException:
+        return None
+
+
+def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
+    """Ensure jobs include company_name and source from the company record when missing."""
+    for job in jobs:
+        if not job.get('company_name'):
+            job['company_name'] = company.get('company_name')
+        if not job.get('source') and company.get('domain'):
+            job['source'] = company.get('domain')
+    return jobs
+
+
+def run_scrape() -> None:
+    """Main scraping workflow orchestrating DB scheduling and rate limiting."""
+    logger = setup_simple_logging()
+    config = get_scraping_config()
+
+    jobs_json_path = os.path.join('data', 'jobs_raw.json')
+    existing_jobs = load_existing_jobs(jobs_json_path)
+    logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
+
+    db = CompaniesDB()
+    # Attempt DB-side selection; if not supported (e.g., NULLS FIRST), fall back to Python filtering
+    try:
+        to_scrape = db.get_companies_to_scrape(
+            limit=config['max_companies_per_run'],
+            max_age_hours=config['max_age_hours'],
+        )
+    except Exception as exc:
+        logger.warning(f"DB-side scheduling query failed ({exc}); falling back to client-side filtering")
+        all_companies = db.get_all_companies(active_only=True)
+        cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
+
+        def parse_ts(ts: Optional[str]) -> Optional[float]:
+            if not ts:
+                return None
+            try:
+                # Support 'YYYY-MM-DD HH:MM:SS[.ffffff]'
+                return datetime.fromisoformat(ts).timestamp()
+            except Exception:
+                try:
+                    from time import strptime, mktime
+                    return mktime(time.strptime(ts.split('.')[0], '%Y-%m-%d %H:%M:%S'))
+                except Exception:
+                    return None
+
+        def needs_scrape(company: Dict) -> bool:
+            ts = parse_ts(company.get('last_scraped'))
+            return ts is None or ts < cutoff
+
+        candidates = [c for c in all_companies if needs_scrape(c)]
+        # Sort: never-scraped first, then oldest scraped
+        candidates.sort(key=lambda c: (c.get('last_scraped') is not None, c.get('last_scraped') or ''))
+        to_scrape = candidates[: config['max_companies_per_run']]
+
+    if not to_scrape:
+        logger.info("No companies require scraping at this time.")
+        return
+
+    logger.info(f"Preparing to scrape {len(to_scrape)} company pages")
+
+    session = requests.Session()
+    new_jobs_total: List[Dict] = []
+
+    for idx, company in enumerate(to_scrape, start=1):
+        url = company.get('job_page_url')
+        if not url:
+            continue
+
+        logger.info(f"[{idx}/{len(to_scrape)}] Fetching {url}")
+        html = fetch_html(url, session, config['request_timeout'], config['user_agent'])
+        if not html:
+            logger.warning(f"Failed to fetch HTML from {url}")
+            # Respect rate limit even on failure
+            time.sleep(config['rate_limit_delay'])
+            continue
+
+        extractor = JobExtractor(html)
+        extracted = extractor.extract_jobs() or []
+        extracted = enrich_jobs_with_company(extracted, company)
+        extracted = add_hash_to_jobs(extracted)
+
+        if extracted:
+            logger.info(f"Extracted {len(extracted)} jobs from {url}")
+        else:
+            logger.info(f"No jobs found for {url}")
+
+        # Merge into in-memory accumulator first, then persist below
+        new_jobs_total.extend(extracted)
+
+        # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
+        try:
+            db.update_last_scraped(url)
+        except Exception:
+            logger.warning(f"Could not update last_scraped for {url}")
+
+        # Rate limit between requests
+        time.sleep(config['rate_limit_delay'])
+
+    # Merge and save once for the entire run
+    if new_jobs_total:
+        merged_jobs = merge_jobs(new_jobs_total, existing_jobs)
+        jobs_added = len(merged_jobs) - len(existing_jobs)
+        with open(jobs_json_path, 'w', encoding='utf-8') as f:
+            json.dump(merged_jobs, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved {len(merged_jobs)} jobs to {jobs_json_path} (+{jobs_added} new)")
+    else:
+        logger.info("No new jobs to save.")
+
+
 if __name__ == "__main__":
-    import os
-
-    # Setup logging
-    logger = setup_logging()
-    
-    logger.info("Starting job scraping process")
-    print("Current working directory:", os.getcwd())
-    print("Files in this directory:", os.listdir())
-
-    # Load existing jobs from data/jobs_raw.json
-    existing_jobs = load_existing_jobs('data/jobs_raw.json')
-    logger.info(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
-    print(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
-
-    with open('tests/fixtures/debug_cardo.html', 'r', encoding='utf-8') as f:
-        html_content = f.read()
-    
-
-    extractor = JobExtractor(html_content)
-    new_jobs = extractor.extract_jobs()
-    
-    # Add hash to new jobs
-    new_jobs = add_hash_to_jobs(new_jobs)
-    
-    logger.info(f"Extracted {len(new_jobs)} jobs from HTML")
-    print(f"Found {len(new_jobs)} jobs in HTML")
-    
-    # Merge with existing jobs
-    all_jobs = merge_jobs(new_jobs, existing_jobs)
-    
-    # Calculate how many were actually added (unique by url_hash)
-    jobs_added = len(all_jobs) - len(existing_jobs)
-    
-    # Print results
-    logger.info(f"Total jobs after merging: {len(all_jobs)}, New jobs added: {jobs_added}")
-    print(f"\nTotal jobs after merging: {len(all_jobs)}")
-    print(f"New jobs added: {jobs_added}\n")
-    
-    for i, job in enumerate(all_jobs, 1):
-        print(f"Job {i}:")
-        print(f"  Title: {job.get('title')}")
-        print(f"  Department: {job.get('department')}")
-        print(f"  Location: {job.get('location')}")
-        print(f"  Type: {job.get('employment_type')}")
-        print(f"  Experience: {job.get('experience_level')}")
-        print(f"  Workplace: {job.get('workplace_type')}")
-        print(f"  URL: {job.get('url')}")
-        print(f"  URL Hash: {job.get('url_hash')}")
-        
-        # Print description if available
-        if isinstance(job.get('description'), dict):
-            if 'description' in job['description']:
-                print(f"  Description: {job['description']['description'][:200]}...")
-        
-        print()
-    
-    # Save to database (Phase 2 - not yet implemented)
-    # logger.info("Saving jobs to database...")
-    # db_inserted, db_duplicates = save_jobs_to_db(all_jobs, source='comeet')
-    # logger.info(f"Database: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
-    # print(f"\nDatabase: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
-    
-    # Also save to JSON as backup (for now)
-    with open('data/jobs_raw.json', 'w', encoding='utf-8') as f:
-        json.dump(all_jobs, f, indent=2, ensure_ascii=False)
-    
-    logger.info(f"Successfully saved {len(all_jobs)} jobs to data/jobs_raw.json ({jobs_added} new jobs added)")
-    print(f"Jobs also saved to data/jobs_raw.json (backup)")
-
-    # soup = BeautifulSoup(html_content, "html.parser")
-    # job_posting = soup.find('a', class_='positionItem')
-    
-    # for a in soup.select("a.positionItem"):
-    #     link = a.get("href")
-    #     position_id = link.split("/")[-1] if link else None
-    #     details = [li.get_text(strip=True) for li in a.select("ul.positionDetails li")]
-    #     experience = next((d for d in details if d in ["Intern", "Junior", "Senior"]), None)
-    #     employment = next((d for d in details if d in ["Full-time", "Part-time", "Contract"]), None)
-    #     print(position_id, link, experience, employment)
-        
-    
+    run_scrape()
