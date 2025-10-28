@@ -9,12 +9,14 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
+import random
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Database access for companies and scrape scheduling
-from scripts.db_utils import CompaniesDB
+from scripts.db_utils import CompaniesDB, generate_job_hash
+from scripts.utils import load_config, setup_logging
 
 
 class JobExtractor:
@@ -41,7 +43,7 @@ class JobExtractor:
         if jobs:
             return jobs
         
-        # Method 3: Extract from JSON-LD schema (placeholder)
+        # Method 3: Extract from JSON-LD schema (placeholder for future)
         
         return []
     
@@ -281,55 +283,29 @@ def load_existing_jobs(filepath: str) -> List[Dict]:
     return []
 
 
-# ----------------------
-# Scraping Orchestration
-# ----------------------
-
-DEFAULT_SCRAPING_CONFIG = {
-    # How stale a company's last_scraped can be before re-scraping (hours)
-    'max_age_hours': 24,
-    # Maximum companies to scrape in one run (anti-ban safety)
-    'max_companies_per_run': 5,
-    # Delay between HTTP requests in seconds (rate limit)
-    'rate_limit_delay': 2,
-    # HTTP client settings
-    'request_timeout': 20,
-    'user_agent': 'JobHunterBot/1.0 (+https://example.com)'
-}
-
-
-def setup_simple_logging() -> logging.Logger:
-    """Setup basic logging without external config dependencies."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    return logging.getLogger('scrape_jobs')
-
-
 def get_scraping_config() -> Dict:
     """
-    Return scraping config. If a project config exists (config.yaml via scripts.utils),
-    it will be used; otherwise fallback to sane defaults.
+    Load scraping configuration from config.yaml job_scraping section.
+    Raises exception if config is missing or invalid.
     """
-    # Lazy import to avoid hard dependency on PyYAML in environments without it
-    try:
-        from scripts.utils import load_config  # type: ignore
-        cfg = load_config()
-        scraping = cfg.get('scraping', {}) if isinstance(cfg, dict) else {}
-        return {
-            'max_age_hours': scraping.get('max_age_hours', DEFAULT_SCRAPING_CONFIG['max_age_hours']),
-            'max_companies_per_run': scraping.get('max_companies_per_run', DEFAULT_SCRAPING_CONFIG['max_companies_per_run']),
-            'rate_limit_delay': scraping.get('rate_limit_delay', DEFAULT_SCRAPING_CONFIG['rate_limit_delay']),
-            'request_timeout': scraping.get('request_timeout', DEFAULT_SCRAPING_CONFIG['request_timeout']),
-            'user_agent': scraping.get('user_agent', DEFAULT_SCRAPING_CONFIG['user_agent']),
-        }
-    except Exception:
-        return DEFAULT_SCRAPING_CONFIG.copy()
+    cfg = load_config()
+    job_scraping = cfg.get('job_scraping', {})
+    
+    if not job_scraping:
+        raise ValueError("Missing 'job_scraping' section in config.yaml")
+    
+    return {
+        'max_age_hours': job_scraping['max_age_hours'],
+        'max_companies_per_run': job_scraping['max_companies_per_run'],
+        'rate_limit_delay': job_scraping['rate_limit_delay'],
+        'request_timeout': job_scraping['timeout'],
+        'user_agents': job_scraping['user_agents'],
+    }
 
 
 def fetch_html(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
     """Fetch HTML content for a given URL using requests."""
+    
     headers = {
         'User-Agent': user_agent,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -356,190 +332,31 @@ def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
     return jobs
 
 
-def run_scrape() -> None:
-    """Main scraping workflow orchestrating DB scheduling and rate limiting."""
-    logger = setup_simple_logging()
-    config = get_scraping_config()
-
-    jobs_json_path = os.path.join('data', 'jobs_raw.json')
-    existing_jobs = load_existing_jobs(jobs_json_path)
-    logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
-
-    db = CompaniesDB()
-    # Attempt DB-side selection; if not supported (e.g., NULLS FIRST), fall back to Python filtering
+def parse_timestamp(ts: Optional[str]) -> Optional[float]:
+    """Parse timestamp string to unix timestamp float. Returns None if parsing fails."""
+    if not ts:
+        return None
     try:
-        to_scrape = db.get_companies_to_scrape(
-            limit=config['max_companies_per_run'],
-            max_age_hours=config['max_age_hours'],
-        )
-    except Exception as exc:
-        logger.warning(f"DB-side scheduling query failed ({exc}); falling back to client-side filtering")
-        all_companies = db.get_all_companies(active_only=True)
-        cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
-
-        def parse_ts(ts: Optional[str]) -> Optional[float]:
-            if not ts:
-                return None
-            try:
-                # Support 'YYYY-MM-DD HH:MM:SS[.ffffff]'
-                return datetime.fromisoformat(ts).timestamp()
-            except Exception:
-                try:
-                    from time import strptime, mktime
-                    return mktime(time.strptime(ts.split('.')[0], '%Y-%m-%d %H:%M:%S'))
-                except Exception:
-                    return None
-
-        def needs_scrape(company: Dict) -> bool:
-            ts = parse_ts(company.get('last_scraped'))
-            return ts is None or ts < cutoff
-
-        candidates = [c for c in all_companies if needs_scrape(c)]
-        # Sort: never-scraped first, then oldest scraped
-        candidates.sort(key=lambda c: (c.get('last_scraped') is not None, c.get('last_scraped') or ''))
-        to_scrape = candidates[: config['max_companies_per_run']]
-
-    if not to_scrape:
-        logger.info("No companies require scraping at this time.")
-        return
-
-    logger.info(f"Preparing to scrape {len(to_scrape)} company pages")
-
-    session = requests.Session()
-    new_jobs_total: List[Dict] = []
-
-    for idx, company in enumerate(to_scrape, start=1):
-        url = company.get('job_page_url')
-        if not url:
-            continue
-
-        logger.info(f"[{idx}/{len(to_scrape)}] Fetching {url}")
-        html = fetch_html(url, session, config['request_timeout'], config['user_agent'])
-        if not html:
-            logger.warning(f"Failed to fetch HTML from {url}")
-            # Respect rate limit even on failure
-            time.sleep(config['rate_limit_delay'])
-            continue
-
-        extractor = JobExtractor(html)
-        extracted = extractor.extract_jobs() or []
-        extracted = enrich_jobs_with_company(extracted, company)
-        extracted = add_hash_to_jobs(extracted)
-
-        if extracted:
-            logger.info(f"Extracted {len(extracted)} jobs from {url}")
-        else:
-            logger.info(f"No jobs found for {url}")
-
-        # Merge into in-memory accumulator first, then persist below
-        new_jobs_total.extend(extracted)
-
-        # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
-        try:
-            db.update_last_scraped(url)
-        except Exception:
-            logger.warning(f"Could not update last_scraped for {url}")
-
-        # Rate limit between requests
-        time.sleep(config['rate_limit_delay'])
-
-    # Merge and save once for the entire run
-    if new_jobs_total:
-        merged_jobs = merge_jobs(new_jobs_total, existing_jobs)
-        jobs_added = len(merged_jobs) - len(existing_jobs)
-        with open(jobs_json_path, 'w', encoding='utf-8') as f:
-            json.dump(merged_jobs, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved {len(merged_jobs)} jobs to {jobs_json_path} (+{jobs_added} new)")
-    else:
-        logger.info("No new jobs to save.")
-
-
-# ----------------------
-# Scraping Orchestration
-# ----------------------
-
-DEFAULT_SCRAPING_CONFIG = {
-    # How stale a company's last_scraped can be before re-scraping (hours)
-    'max_age_hours': 24,
-    # Maximum companies to scrape in one run (anti-ban safety)
-    'max_companies_per_run': 5,
-    # Delay between HTTP requests in seconds (rate limit)
-    'rate_limit_delay': 2,
-    # HTTP client settings
-    'request_timeout': 20,
-    'user_agent': 'JobHunterBot/1.0 (+https://example.com)'
-}
-
-
-def setup_simple_logging() -> logging.Logger:
-    """Setup basic logging without external config dependencies."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    return logging.getLogger('scrape_jobs')
-
-
-def get_scraping_config() -> Dict:
-    """
-    Return scraping config. If a project config exists (config.yaml via scripts.utils),
-    it will be used; otherwise fallback to sane defaults.
-    """
-    # Lazy import to avoid hard dependency on PyYAML in environments without it
-    try:
-        from scripts.utils import load_config  # type: ignore
-        cfg = load_config()
-        scraping = cfg.get('scraping', {}) if isinstance(cfg, dict) else {}
-        return {
-            'max_age_hours': scraping.get('max_age_hours', DEFAULT_SCRAPING_CONFIG['max_age_hours']),
-            'max_companies_per_run': scraping.get('max_companies_per_run', DEFAULT_SCRAPING_CONFIG['max_companies_per_run']),
-            'rate_limit_delay': scraping.get('rate_limit_delay', DEFAULT_SCRAPING_CONFIG['rate_limit_delay']),
-            'request_timeout': scraping.get('request_timeout', DEFAULT_SCRAPING_CONFIG['request_timeout']),
-            'user_agent': scraping.get('user_agent', DEFAULT_SCRAPING_CONFIG['user_agent']),
-        }
+        return datetime.fromisoformat(ts.replace(' ', 'T')).timestamp()
     except Exception:
-        return DEFAULT_SCRAPING_CONFIG.copy()
-
-
-def fetch_html(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
-    """Fetch HTML content for a given URL using requests."""
-    headers = {
-        'User-Agent': user_agent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'close',
-    }
-    try:
-        sess = session or requests.Session()
-        resp = sess.get(url, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            return resp.text
         return None
-    except requests.RequestException:
-        return None
-
-
-def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
-    """Ensure jobs include company_name and source from the company record when missing."""
-    for job in jobs:
-        if not job.get('company_name'):
-            job['company_name'] = company.get('company_name')
-        if not job.get('source') and company.get('domain'):
-            job['source'] = company.get('domain')
-    return jobs
 
 
 def run_scrape() -> None:
     """Main scraping workflow orchestrating DB scheduling and rate limiting."""
-    logger = setup_simple_logging()
+    logger = setup_logging()
     config = get_scraping_config()
+    
+    logger.info(f"Starting scrape with config: max_companies={config['max_companies_per_run']}, "
+                f"rate_limit={config['rate_limit_delay']}s, timeout={config['request_timeout']}s")
 
     jobs_json_path = os.path.join('data', 'jobs_raw.json')
     existing_jobs = load_existing_jobs(jobs_json_path)
     logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
 
     db = CompaniesDB()
-    # Attempt DB-side selection; if not supported (e.g., NULLS FIRST), fall back to Python filtering
+    
+    # Attempt DB-side selection; if not supported, fall back to Python filtering
     try:
         to_scrape = db.get_companies_to_scrape(
             limit=config['max_companies_per_run'],
@@ -550,27 +367,14 @@ def run_scrape() -> None:
         all_companies = db.get_all_companies(active_only=True)
         cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
 
-        def parse_ts(ts: Optional[str]) -> Optional[float]:
-            if not ts:
-                return None
-            try:
-                # Support 'YYYY-MM-DD HH:MM:SS[.ffffff]'
-                return datetime.fromisoformat(ts).timestamp()
-            except Exception:
-                try:
-                    from time import strptime, mktime
-                    return mktime(time.strptime(ts.split('.')[0], '%Y-%m-%d %H:%M:%S'))
-                except Exception:
-                    return None
-
         def needs_scrape(company: Dict) -> bool:
-            ts = parse_ts(company.get('last_scraped'))
+            ts = parse_timestamp(company.get('last_scraped'))
             return ts is None or ts < cutoff
 
         candidates = [c for c in all_companies if needs_scrape(c)]
-        # Sort: never-scraped first, then oldest scraped
-        candidates.sort(key=lambda c: (c.get('last_scraped') is not None, c.get('last_scraped') or ''))
-        to_scrape = candidates[: config['max_companies_per_run']]
+        # Sort: never-scraped first (None), then oldest scraped
+        candidates.sort(key=lambda c: parse_timestamp(c.get('last_scraped')) or 0)
+        to_scrape = candidates[:config['max_companies_per_run']]
 
     if not to_scrape:
         logger.info("No companies require scraping at this time.")
@@ -586,8 +390,11 @@ def run_scrape() -> None:
         if not url:
             continue
 
+        # Rotate user agents for better stealth
+        user_agent = random.choice(config['user_agents'])
+        
         logger.info(f"[{idx}/{len(to_scrape)}] Fetching {url}")
-        html = fetch_html(url, session, config['request_timeout'], config['user_agent'])
+        html = fetch_html(url, session, config['request_timeout'], user_agent)
         if not html:
             logger.warning(f"Failed to fetch HTML from {url}")
             # Respect rate limit even on failure
@@ -604,14 +411,14 @@ def run_scrape() -> None:
         else:
             logger.info(f"No jobs found for {url}")
 
-        # Merge into in-memory accumulator first, then persist below
+        # Merge into in-memory accumulator
         new_jobs_total.extend(extracted)
 
         # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
         try:
             db.update_last_scraped(url)
-        except Exception:
-            logger.warning(f"Could not update last_scraped for {url}")
+        except Exception as e:
+            logger.warning(f"Could not update last_scraped for {url}: {e}")
 
         # Rate limit between requests
         time.sleep(config['rate_limit_delay'])
