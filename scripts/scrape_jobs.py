@@ -9,8 +9,10 @@ from bs4 import BeautifulSoup
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.utils import setup_logging
-from scripts.db_utils import JobsDB, initialize_database, COMPANIES_PAGES_DB, generate_job_hash
-from scripts.db_schema import get_jobs_schema
+# TODO: Phase 2 - Add JobsDB when implementing jobs database
+# from scripts.db_utils import JobsDB, initialize_database
+# from scripts.db_schema import get_jobs_schema
+from scripts.db_utils import generate_job_hash
 
 
 class JobExtractor:
@@ -256,6 +258,9 @@ def save_jobs_to_db(jobs: List[Dict], source: str = 'comeet') -> tuple[int, int]
     """
     Save jobs to the database.
     
+    TODO: Phase 2 - Implement when JobsDB is created
+    Currently returns 0, 0 to maintain compatibility.
+    
     Args:
         jobs: List of job dictionaries
         source: Source of the jobs (e.g., 'comeet', 'google_api')
@@ -263,53 +268,10 @@ def save_jobs_to_db(jobs: List[Dict], source: str = 'comeet') -> tuple[int, int]
     Returns:
         Tuple of (inserted_count, duplicate_count)
     """
-    # Initialize database if needed
-    try:
-        initialize_database(COMPANIES_PAGES_DB, get_jobs_schema())
-    except Exception as e:
-        print(f"Warning: Could not initialize database: {e}")
-        return 0, 0
-    
-    jobs_db = JobsDB()
-    inserted = 0
-    duplicates = 0
-    
-    for job in jobs:
-        # Prepare job data for database
-        job_data = {
-            'url': job.get('url', ''),
-            'title': job.get('title', ''),
-            'company': job.get('company_name', job.get('company', '')),
-            'company_name': job.get('company_name', job.get('company', '')),
-            'source': source,
-            'department': job.get('department'),
-            'location': job.get('location'),
-            'employment_type': job.get('employment_type'),
-            'experience_level': job.get('experience_level'),
-            'workplace_type': job.get('workplace_type'),
-            'uid': job.get('uid'),
-            'last_updated': job.get('last_updated'),
-        }
-        
-        # Handle description (might be a dict)
-        if isinstance(job.get('description'), dict):
-            job_data['description'] = json.dumps(job['description'])
-        else:
-            job_data['description'] = job.get('description')
-        
-        # Generate job hash
-        job_data['job_hash'] = generate_job_hash(job_data['url'], job_data['title'])
-        
-        # Try to insert
-        result = jobs_db.insert_job(job_data)
-        if result:
-            inserted += 1
-        else:
-            duplicates += 1
-            # Update last_checked for duplicate
-            jobs_db.update_job_checked(job_data['job_hash'])
-    
-    return inserted, duplicates
+    # Phase 2: Jobs database not yet implemented
+    # For now, jobs are stored in JSON files only
+    print("Note: Jobs database (Phase 2) not yet implemented. Jobs saved to JSON only.")
+    return 0, 0
 
 
 def load_existing_jobs(filepath: str) -> List[Dict]:
@@ -387,11 +349,11 @@ if __name__ == "__main__":
         
         print()
     
-    # Save to database
-    logger.info("Saving jobs to database...")
-    db_inserted, db_duplicates = save_jobs_to_db(all_jobs, source='comeet')
-    logger.info(f"Database: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
-    print(f"\nDatabase: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
+    # Save to database (Phase 2 - not yet implemented)
+    # logger.info("Saving jobs to database...")
+    # db_inserted, db_duplicates = save_jobs_to_db(all_jobs, source='comeet')
+    # logger.info(f"Database: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
+    # print(f"\nDatabase: {db_inserted} jobs inserted, {db_duplicates} duplicates found")
     
     # Also save to JSON as backup (for now)
     with open('data/jobs_raw.json', 'w', encoding='utf-8') as f:
