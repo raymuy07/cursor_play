@@ -306,8 +306,7 @@ if __name__ == "__main__":
     logger.info(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
     print(f"Loaded {len(existing_jobs)} existing jobs from data/jobs_raw.json")
 
-    # Then your load command:
-    with open('scripts/debug_dream.html', 'r', encoding='utf-8') as f:
+    with open('tests/fixtures/debug_cardo.html', 'r', encoding='utf-8') as f:
         html_content = f.read()
     
 
