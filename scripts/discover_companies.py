@@ -8,9 +8,9 @@ import requests
 import json
 import time
 from typing import List, Dict
-from utils import load_config, setup_logging
-from db_utils import SearchQueriesDB, CompaniesDB, initialize_database, SEARCH_QUERIES_DB, COMPANIES_DB
-from db_schema import get_search_queries_schema, get_companies_schema
+from scripts.utils import load_config, setup_logging
+from scripts.db_utils import SearchQueriesDB, CompaniesDB, initialize_database, SEARCH_QUERIES_DB, COMPANIES_DB
+from scripts.db_schema import get_search_queries_schema, get_companies_schema
 
 
 def discover_companies() -> List[Dict]:

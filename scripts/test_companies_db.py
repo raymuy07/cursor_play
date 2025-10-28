@@ -3,8 +3,8 @@
 Test script to verify companies database functionality
 """
 
-from db_utils import CompaniesDB, initialize_database, COMPANIES_DB
-from db_schema import get_companies_schema
+from scripts.db_utils import CompaniesDB, initialize_database, COMPANIES_DB
+from scripts.db_schema import get_companies_schema
 
 def main():
     # Initialize database
