@@ -10,11 +10,17 @@ import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from contextlib import contextmanager
+from scripts.utils import setup_logging
+
+# Setup logger for this module
+logger = setup_logging()
+
 
 # Database paths
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 SEARCH_QUERIES_DB = os.path.join(DATA_DIR, 'search_queries.db')
 COMPANIES_DB = os.path.join(DATA_DIR, 'companies.db')
+JOBS_DB = os.path.join(DATA_DIR, 'jobs.db')
 
 
 def ensure_data_directory():
@@ -394,3 +400,365 @@ class CompaniesDB:
             
             cursor.execute(query, params)
             return cursor.fetchone()[0]
+
+
+class JobsDB:
+    """Interface for jobs.db operations"""
+    
+    def __init__(self, db_path: str = JOBS_DB):
+        self.db_path = db_path
+    
+    def get_department_id(self, raw_dept: str) -> Optional[int]:
+        """
+        Get department ID from raw department text using synonym lookup.
+        Logs a warning if department is not found.
+        
+        Args:
+            raw_dept: Raw department text from scraping
+            
+        Returns:
+            Department ID or None if not found or if raw_dept is None/empty
+        """
+        if not raw_dept or not raw_dept.strip():
+            return None
+        
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Try exact synonym match first
+            cursor.execute(
+                """
+                SELECT department_id FROM department_synonyms 
+                WHERE synonym = ? COLLATE NOCASE
+                """,
+                (raw_dept.strip(),)
+            )
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            
+            # Try partial match on canonical name
+            cursor.execute(
+                """
+                SELECT id FROM departments 
+                WHERE canonical_name = ? COLLATE NOCASE
+                """,
+                (raw_dept.strip(),)
+            )
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            
+            # Not found - log warning
+            logger.warning(f"Department not found in reference data: '{raw_dept.strip()}'")
+            return None
+    
+    def get_location_id(self, raw_loc: str) -> Optional[int]:
+        """
+        Get location ID from raw location text using synonym lookup.
+        Logs a warning if location is not found.
+        
+        Args:
+            raw_loc: Raw location text from scraping
+            
+        Returns:
+            Location ID or None if not found or if raw_loc is None/empty
+        """
+        if not raw_loc or not raw_loc.strip():
+            return None
+        
+        # Handle locations with multiple parts (e.g., "City, IL")
+        # Extract main location before commas or parentheses
+        clean_loc = raw_loc.split(',')[0].strip()
+        
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Try exact synonym match first
+            cursor.execute(
+                """
+                SELECT location_id FROM location_synonyms 
+                WHERE synonym = ? COLLATE NOCASE
+                """,
+                (clean_loc,)
+            )
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            
+            # Try partial match on canonical name
+            cursor.execute(
+                """
+                SELECT id FROM locations 
+                WHERE canonical_name = ? COLLATE NOCASE
+                """,
+                (clean_loc,)
+            )
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            
+            # Not found - log warning
+            logger.warning(f"Location not found in reference data: '{clean_loc}' (from '{raw_loc}')")
+            return None
+    
+    def insert_job(self, job_data: Dict[str, Any]) -> Optional[int]:
+        """
+        Insert a new job into the database.
+        Handles duplicate prevention via URL uniqueness.
+        Automatically normalizes departments and locations.
+        
+        Args:
+            job_data: Dictionary containing job information
+                Required: title, url
+                Optional: All other job fields
+            
+        Returns:
+            ID of the inserted record, or None if duplicate
+        """
+        try:
+            # Normalize department and location
+            dept_id = self.get_department_id(job_data.get('department'))
+            loc_id = self.get_location_id(job_data.get('location'))
+            
+            # Handle description - convert dict to text if needed
+            description = job_data.get('description', '')
+            if isinstance(description, dict):
+                description = '\n\n'.join(f"{k}:\n{v}" for k, v in description.items() if v)
+            
+            # Generate URL hash
+            url = job_data.get('url')
+            url_hash = generate_job_hash(url, job_data.get('title', ''))
+            
+            # Parse from_domain from URL
+            from_domain = None
+            if url:
+                from urllib.parse import urlparse
+                from_domain = urlparse(url).netloc
+            
+            with get_db_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute(
+                    """
+                    INSERT INTO jobs (
+                        title, company_name, department, department_id,
+                        location, location_id, workplace_type, experience_level,
+                        employment_type, publish_date, description, uid,
+                        url, url_hash, from_domain, email, is_ai_inferred
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        job_data.get('title'),
+                        job_data.get('company_name'),
+                        job_data.get('department'),
+                        dept_id,
+                        job_data.get('location'),
+                        loc_id,
+                        job_data.get('workplace_type'),
+                        job_data.get('experience_level'),
+                        job_data.get('employment_type', 'Full-time'),
+                        job_data.get('last_updated') or job_data.get('publish_date'),
+                        description,
+                        job_data.get('uid'),
+                        url,
+                        url_hash,
+                        from_domain,
+                        job_data.get('email'),
+                        job_data.get('is_ai_inferred', False)
+                    )
+                )
+                return cursor.lastrowid
+                
+        except sqlite3.IntegrityError as e:
+            # Duplicate job (URL already exists)
+            return None
+    
+
+
+    ##I still dont know if we need this function
+    def get_job_by_url(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a job by its URL.
+        
+        Args:
+            url: Job posting URL
+            
+        Returns:
+            Job record as dictionary or None if not found
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM jobs WHERE url = ?",
+                (url,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def get_jobs_by_company(self, company_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get all jobs for a specific company.
+        
+        Args:
+            company_name: Company name to filter by
+            limit: Optional limit on number of results
+            
+        Returns:
+            List of job records as dictionaries
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM jobs WHERE company_name = ? ORDER BY scraped_at DESC"
+            if limit:
+                query += f" LIMIT {limit}"
+            
+            cursor.execute(query, (company_name,))
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_jobs_by_filters(
+        self,
+        workplace_type: Optional[str] = None,
+        experience_level: Optional[str] = None,
+        employment_type: Optional[str] = None,
+        department_id: Optional[int] = None,
+        location_id: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get jobs filtered by various criteria.
+        
+        Args:
+            workplace_type: Filter by workplace type
+            experience_level: Filter by experience level
+            employment_type: Filter by employment type
+            department_id: Filter by department ID
+            location_id: Filter by location ID
+            limit: Optional limit on number of results
+            
+        Returns:
+            List of job records as dictionaries
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM jobs WHERE 1=1"
+            params = []
+            
+            if workplace_type:
+                query += " AND workplace_type = ?"
+                params.append(workplace_type)
+            
+            if experience_level:
+                query += " AND experience_level = ?"
+                params.append(experience_level)
+            
+            if employment_type:
+                query += " AND employment_type = ?"
+                params.append(employment_type)
+            
+            if department_id:
+                query += " AND department_id = ?"
+                params.append(department_id)
+            
+            if location_id:
+                query += " AND location_id = ?"
+                params.append(location_id)
+            
+            query += " ORDER BY scraped_at DESC"
+            
+            if limit:
+                query += f" LIMIT {limit}"
+            
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def count_jobs(
+        self,
+        workplace_type: Optional[str] = None,
+        experience_level: Optional[str] = None,
+        department_id: Optional[int] = None,
+        location_id: Optional[int] = None
+    ) -> int:
+        """
+        Count jobs with optional filters.
+        
+        Args:
+            workplace_type: Filter by workplace type
+            experience_level: Filter by experience level
+            department_id: Filter by department ID
+            location_id: Filter by location ID
+            
+        Returns:
+            Number of jobs matching filters
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT COUNT(*) FROM jobs WHERE 1=1"
+            params = []
+            
+            if workplace_type:
+                query += " AND workplace_type = ?"
+                params.append(workplace_type)
+            
+            if experience_level:
+                query += " AND experience_level = ?"
+                params.append(experience_level)
+            
+            if department_id:
+                query += " AND department_id = ?"
+                params.append(department_id)
+            
+            if location_id:
+                query += " AND location_id = ?"
+                params.append(location_id)
+            
+            cursor.execute(query, params)
+            return cursor.fetchone()[0]
+    
+
+    #I still dont know if we need this function
+    def get_all_departments(self) -> List[Dict[str, Any]]:
+        """
+        Get all departments with their synonyms.
+        
+        Returns:
+            List of department records
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT d.*, GROUP_CONCAT(ds.synonym, ', ') as synonyms
+                FROM departments d
+                LEFT JOIN department_synonyms ds ON d.id = ds.department_id
+                GROUP BY d.id
+                ORDER BY d.canonical_name
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    
+    
+    #!!!I still dont know if we need this function
+    def get_all_locations(self) -> List[Dict[str, Any]]:
+        """
+        Get all locations with their synonyms.
+        
+        Returns:
+            List of location records
+        """
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT l.*, GROUP_CONCAT(ls.synonym, ', ') as synonyms
+                FROM locations l
+                LEFT JOIN location_synonyms ls ON l.id = ls.location_id
+                GROUP BY l.id
+                ORDER BY l.canonical_name
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
