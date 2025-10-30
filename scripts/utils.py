@@ -9,8 +9,11 @@ import json
 import logging
 import requests
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from pathlib import Path
+
+
+_LOGGER: Optional[logging.Logger] = None
 
 
 def load_config() -> Dict[str, Any]:
@@ -43,26 +46,42 @@ def load_config() -> Dict[str, Any]:
 
 
 def setup_logging() -> logging.Logger:
-    """
-    Set up logging configuration
-    """
-    config = load_config()
-    log_config = config.get('logging', {})
-    
-    # Create logs directory if it doesn't exist
+    """Configure and return the shared application logger."""
+    global _LOGGER
+
+    if _LOGGER is not None:
+        return _LOGGER
+
+    log_config: Dict[str, Any] = {}
+
+    try:
+        config = load_config()
+        log_config = config.get('logging', {})
+    except Exception:
+        # Fall back to defaults if configuration cannot be loaded
+        log_config = {}
+
     Path('logs').mkdir(exist_ok=True)
-    
-    # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, log_config.get('level', 'INFO')),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_config.get('file', 'logs/jobhunter.log')),
-            logging.StreamHandler()
-        ]
-    )
-    
-    return logging.getLogger('jobhunter')
+
+    logger = logging.getLogger('jobhunter')
+    logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
+    logger.propagate = False
+
+    if not logger.handlers:
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        file_path = log_config.get('file', 'logs/jobhunter.log')
+        file_handler = logging.FileHandler(file_path)
+        file_handler.setFormatter(formatter)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
+
+    _LOGGER = logger
+    return _LOGGER
 
 
 
