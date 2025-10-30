@@ -6,7 +6,7 @@ Creates and initializes both search_queries.db and companies_pages.db
 
 import os
 import sys
-from scripts.utils import setup_logging
+from utils import setup_logging
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
