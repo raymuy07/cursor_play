@@ -1,0 +1,12 @@
+# Project Overview
+- Automates discovery of company job pages, scraping listings, and persisting them in SQLite (`scripts/db_utils.py`).
+- Supports filtering curated jobs and generating CV embeddings for similarity scoring (`scripts/filter_jobs.py`, `scripts/embed_cv.py`).
+
+# Data Flow
+1. `scripts/discover_companies.py` seeds `companies.db` with sources from external search.
+2. `scripts/scrape_jobs.py` pulls postings into SQLite and enriches them with metadata.
+
+
+# Ops Notes
+- Runtime configuration: `config.yaml`; logging centralized via `scripts/utils.setup_logging()`.
+- Tests and diagnostics live under `tests/`; fixtures reside in `tests/fixtures/`.

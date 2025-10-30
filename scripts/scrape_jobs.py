@@ -15,16 +15,17 @@ import random
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Database access for companies and scrape scheduling
-from scripts.db_utils import CompaniesDB, generate_job_hash
+from scripts.db_utils import CompaniesDB, JobsDB, generate_job_hash
 from scripts.utils import load_config, setup_logging
 
 
 class JobExtractor:
     """Extract job information from HTML using multiple parsing strategies."""
     
-    def __init__(self, html_content: str):
+    def __init__(self, html_content: str, logger: Optional[logging.Logger] = None):
         self.html_content = html_content
         self.soup = BeautifulSoup(html_content, 'html.parser')
+        self.logger = logger or setup_logging()
     
     def extract_jobs(self) -> List[Dict]:
         """
@@ -74,6 +75,7 @@ class JobExtractor:
                         'uid': job.get('uid'),
                         'url': job.get('url_comeet_hosted_page'),
                         'company_name': job.get('company_name'),
+                        'email': job.get('email'),
                         'last_updated': job.get('time_updated'),
                         'description': self._parse_custom_fields(job.get('custom_fields', {}))
                     }
@@ -81,7 +83,7 @@ class JobExtractor:
                 
                 return jobs
         except (json.JSONDecodeError, AttributeError) as e:
-            print(f"Error parsing JS variable: {e}")
+            self.logger.warning(f"Error parsing JS variable: {e}")
         
         return []
     
@@ -232,55 +234,37 @@ def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
     return jobs
 
 
-def merge_jobs(new_jobs: List[Dict], existing_jobs: List[Dict]) -> List[Dict]:
+def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.Logger] = None) -> tuple[int, int]:
     """
-    Merge new jobs with existing jobs, avoiding duplicates based on URL.
+    Save jobs to the jobs database using JobsDB.
+    Automatically handles duplicate detection (via URL uniqueness).
     
     Args:
-        new_jobs: List of newly extracted jobs
-        existing_jobs: List of existing jobs
+        jobs: List of job dictionaries to save
+        jobs_db: JobsDB instance for database operations
+        logger: Optional logger instance
         
     Returns:
-        Merged list of unique jobs
+        Tuple of (jobs_inserted, jobs_skipped) where:
+        - jobs_inserted: Number of new jobs successfully inserted
+        - jobs_skipped: Number of jobs skipped (duplicates or errors)
     """
-    # Create a set of existing URL hashes for quick lookup
-    existing_hashes = {job.get('url_hash', '') for job in existing_jobs}
+    logger = logger or setup_logging()
+    inserted = 0
+    skipped = 0
     
-    # Filter out jobs that already exist
-    unique_new_jobs = [
-        job for job in new_jobs 
-        if job.get('url_hash', '') not in existing_hashes
-    ]
-    
-    # Combine existing and new unique jobs
-    merged_jobs = existing_jobs + unique_new_jobs
-    
-    return merged_jobs
-
-
-def save_jobs_to_db(jobs: List[Dict], source: str = 'comeet') -> tuple[int, int]:
-    """
-    Placeholder for Phase 2 JobsDB integration.
-    Currently returns (0, 0) and does nothing.
-    """
-    return 0, 0
-
-
-def load_existing_jobs(filepath: str) -> List[Dict]:
-    """Load existing jobs from file if it exists."""
-    if os.path.exists(filepath):
+    for job in jobs:
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                jobs = json.load(f)
-                # Ensure all jobs have hashes
-                for job in jobs:
-                    if 'url_hash' not in job or not job.get('url_hash'):
-                        job['url_hash'] = generate_url_hash(job.get('url', ''))
-                return jobs
-        except json.JSONDecodeError:
-            print(f"Warning: Could not parse {filepath}, starting with empty list")
-            return []
-    return []
+            job_id = jobs_db.insert_job(job)
+            if job_id:
+                inserted += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
+            skipped += 1
+    
+    return inserted, skipped
 
 
 def get_scraping_config() -> Dict:
@@ -350,21 +334,19 @@ def run_scrape() -> None:
     logger.info(f"Starting scrape with config: max_companies={config['max_companies_per_run']}, "
                 f"rate_limit={config['rate_limit_delay']}s, timeout={config['request_timeout']}s")
 
-    jobs_json_path = os.path.join('data', 'jobs_raw.json')
-    existing_jobs = load_existing_jobs(jobs_json_path)
-    logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
-
-    db = CompaniesDB()
+    # Initialize database connections
+    companies_db = CompaniesDB()
+    jobs_db = JobsDB()
     
     # Attempt DB-side selection; if not supported, fall back to Python filtering
     try:
-        to_scrape = db.get_companies_to_scrape(
+        to_scrape = companies_db.get_companies_to_scrape(
             limit=config['max_companies_per_run'],
             max_age_hours=config['max_age_hours'],
         )
     except Exception as exc:
         logger.warning(f"DB-side scheduling query failed ({exc}); falling back to client-side filtering")
-        all_companies = db.get_all_companies(active_only=True)
+        all_companies = companies_db.get_all_companies(active_only=True)
         cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
 
         def needs_scrape(company: Dict) -> bool:
@@ -401,7 +383,7 @@ def run_scrape() -> None:
             time.sleep(config['rate_limit_delay'])
             continue
 
-        extractor = JobExtractor(html)
+        extractor = JobExtractor(html, logger=logger)
         extracted = extractor.extract_jobs() or []
         extracted = enrich_jobs_with_company(extracted, company)
         extracted = add_hash_to_jobs(extracted)
@@ -411,25 +393,22 @@ def run_scrape() -> None:
         else:
             logger.info(f"No jobs found for {url}")
 
-        # Merge into in-memory accumulator
+        # Accumulate jobs for batch insertion
         new_jobs_total.extend(extracted)
 
         # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
         try:
-            db.update_last_scraped(url)
+            companies_db.update_last_scraped(url)
         except Exception as e:
             logger.warning(f"Could not update last_scraped for {url}: {e}")
 
         # Rate limit between requests
         time.sleep(config['rate_limit_delay'])
 
-    # Merge and save once for the entire run
+    # Save all extracted jobs to database (duplicate handling is automatic)
     if new_jobs_total:
-        merged_jobs = merge_jobs(new_jobs_total, existing_jobs)
-        jobs_added = len(merged_jobs) - len(existing_jobs)
-        with open(jobs_json_path, 'w', encoding='utf-8') as f:
-            json.dump(merged_jobs, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved {len(merged_jobs)} jobs to {jobs_json_path} (+{jobs_added} new)")
+        inserted, skipped = save_jobs_to_db(new_jobs_total, jobs_db, logger)
+        logger.info(f"Saved {inserted} new jobs to database ({skipped} duplicates skipped)")
     else:
         logger.info("No new jobs to save.")
 
