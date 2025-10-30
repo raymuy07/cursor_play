@@ -6,7 +6,7 @@ Creates and initializes both search_queries.db and companies_pages.db
 
 import os
 import sys
-import logging
+from scripts.utils import setup_logging
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,18 +23,9 @@ from scripts.db_utils import (
 )
 
 
-def setup_simple_logging():
-    """Setup basic logging without config.yaml dependency"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
-    return logging.getLogger('db_init')
-
-
 def init_search_queries_db():
     """Initialize search_queries.db"""
-    logger = setup_simple_logging()
+    logger = setup_logging()
     
     logger.info(f"Initializing search_queries.db at {SEARCH_QUERIES_DB}")
     
@@ -56,7 +47,7 @@ def init_search_queries_db():
 
 def init_companies_db():
     """Initialize companies.db"""
-    logger = setup_simple_logging()
+    logger = setup_logging()
     
     logger.info(f"Initializing companies.db at {COMPANIES_DB}")
     
@@ -97,7 +88,7 @@ def init_companies_db():
 
 def init_jobs_db():
     """Initialize jobs.db"""
-    logger = setup_simple_logging()
+    logger = setup_logging()
     
     logger.info(f"Initializing jobs.db at {JOBS_DB}")
     
@@ -152,7 +143,7 @@ def init_jobs_db():
 
 def main():
     """Initialize both databases"""
-    logger = setup_simple_logging()
+    logger = setup_logging()
     
     logger.info("=" * 60)
     logger.info("DATABASE INITIALIZATION")
