@@ -37,7 +37,7 @@ except ImportError:
 class CVReader:
     """Reads and extracts text from CV files (PDF or DOCX)."""
     
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, logger: Optional[logging.Logger] = None):
         """
         Initialize CVReader with a file path.
         
@@ -46,6 +46,7 @@ class CVReader:
         """
         self.file_path = file_path
         self.file_extension = Path(file_path).suffix.lower()
+        self.logger = logger or setup_logging()
         
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"CV file not found: {file_path}")
@@ -85,7 +86,7 @@ class CVReader:
                 pdf_reader = PyPDF2.PdfReader(file)
                 num_pages = len(pdf_reader.pages)
                 
-                logging.info(f"Reading PDF with {num_pages} pages...")
+                self.logger.info(f"Reading PDF with {num_pages} pages...")
                 
                 for page_num in range(num_pages):
                     page = pdf_reader.pages[page_num]
@@ -130,7 +131,7 @@ class CVReader:
             all_text = paragraphs + table_text
             full_text = "\n".join(all_text)
             
-            logging.info(f"Read DOCX with {len(paragraphs)} paragraphs and {len(doc.tables)} tables")
+            self.logger.info(f"Read DOCX with {len(paragraphs)} paragraphs and {len(doc.tables)} tables")
             
             return self._clean_text(full_text)
             
@@ -162,7 +163,7 @@ class CVReader:
 class CVEmbedder:
     """Generates embeddings from CV text using sentence-transformers."""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", logger: Optional[logging.Logger] = None):
         """
         Initialize CVEmbedder with a specific model.
         
@@ -176,11 +177,14 @@ class CVEmbedder:
             )
         
         self.model_name = model_name
-        logging.info(f"Loading sentence-transformer model: {model_name}...")
+        self.logger = logger or setup_logging()
+        self.logger.info(f"Loading sentence-transformer model: {model_name}...")
         
         try:
             self.model = SentenceTransformer(model_name)
-            logging.info(f"Model loaded successfully. Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
+            self.logger.info(
+                f"Model loaded successfully. Embedding dimension: {self.model.get_sentence_embedding_dimension()}"
+            )
         except Exception as e:
             raise RuntimeError(f"Error loading model {model_name}: {str(e)}")
     
@@ -197,7 +201,7 @@ class CVEmbedder:
         if not text or not text.strip():
             raise ValueError("Cannot generate embeddings for empty text")
         
-        logging.info(f"Generating embedding for text ({len(text)} characters)...")
+        self.logger.info(f"Generating embedding for text ({len(text)} characters)...")
         
         try:
             # Generate embedding
@@ -213,7 +217,7 @@ class CVEmbedder:
                 'text_length': len(text)
             }
             
-            logging.info(f"Embedding generated successfully. Dimension: {len(embedding)}")
+            self.logger.info(f"Embedding generated successfully. Dimension: {len(embedding)}")
             
             return result
             
@@ -236,11 +240,11 @@ class CVEmbedder:
             with open(output_path, 'wb') as f:
                 pickle.dump(embedding_data, f)
             
-            logging.info(f"Embedding saved successfully to: {output_path}")
+            self.logger.info(f"Embedding saved successfully to: {output_path}")
             
             # Print summary
             file_size = os.path.getsize(output_path) / 1024  # KB
-            logging.info(f"File size: {file_size:.2f} KB")
+            self.logger.info(f"File size: {file_size:.2f} KB")
             
         except Exception as e:
             raise RuntimeError(f"Error saving embedding: {str(e)}")
@@ -276,7 +280,7 @@ def main():
         # Step 1: Read CV file
         logger.info(f"Step 1: Reading CV from: {cv_path}")
         try:
-            cv_reader = CVReader(cv_path)
+            cv_reader = CVReader(cv_path, logger=logger)
             cv_text = cv_reader.extract_text()
         except Exception as e:
             logger.error(f"Error reading CV file: {e}")
@@ -288,7 +292,7 @@ def main():
         # Step 2: Generate embeddings
         logger.info(f"\nStep 2: Generating embeddings using model: {model_name}")
         try:
-            embedder = CVEmbedder(model_name=model_name)
+            embedder = CVEmbedder(model_name=model_name, logger=logger)
         except Exception as e:
             logger.error(f"Error initializing embedder: {e}")
             sys.exit(1)

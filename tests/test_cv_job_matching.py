@@ -14,7 +14,7 @@ import sys
 import json
 import pickle
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -34,7 +34,12 @@ except ImportError:
 class JobMatcher:
     """Matches jobs to CV using embedding similarity."""
     
-    def __init__(self, cv_embedding_path: str, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(
+        self,
+        cv_embedding_path: str,
+        model_name: str = "all-MiniLM-L6-v2",
+        logger: Optional[logging.Logger] = None,
+    ):
         """
         Initialize JobMatcher.
         
@@ -42,7 +47,7 @@ class JobMatcher:
             cv_embedding_path: Path to the CV embeddings pickle file
             model_name: Name of the sentence-transformer model (must match CV embedding model)
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger or setup_logging()
         
         # Load CV embeddings
         self.logger.info(f"Loading CV embeddings from: {cv_embedding_path}")
@@ -307,7 +312,7 @@ def main():
     
     try:
         # Initialize matcher
-        matcher = JobMatcher(cv_embeddings_path, model_name=model_name)
+        matcher = JobMatcher(cv_embeddings_path, model_name=model_name, logger=logger)
         
         # Load jobs
         jobs = matcher.load_jobs(jobs_file, max_jobs=num_jobs)
