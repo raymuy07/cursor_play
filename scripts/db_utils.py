@@ -514,9 +514,15 @@ class JobsDB:
                 Optional: All other job fields
             
         Returns:
-            ID of the inserted record, or None if duplicate
+            ID of the inserted record, or None if duplicate or error occurred
         """
         try:
+            # Validate required fields
+            url = job_data.get('url')
+            if not url:
+                logger.error("Cannot insert job without URL")
+                return None
+            
             # Normalize department and location
             dept_id = self.get_department_id(job_data.get('department'))
             loc_id = self.get_location_id(job_data.get('location'))
@@ -527,7 +533,6 @@ class JobsDB:
                 description = '\n\n'.join(f"{k}:\n{v}" for k, v in description.items() if v)
             
             # Generate URL hash
-            url = job_data.get('url')
             url_hash = generate_job_hash(url, job_data.get('title', ''))
             
             # Parse from_domain from URL
@@ -572,7 +577,18 @@ class JobsDB:
                 return cursor.lastrowid
                 
         except sqlite3.IntegrityError as e:
-            # Duplicate job (URL already exists)
+            # Check if it's a URL duplicate (most common case)
+            error_msg = str(e).lower()
+            if 'url' in error_msg or 'unique constraint' in error_msg:
+                # Likely a duplicate URL or hash collision
+                return None
+            else:
+                # Other constraint violation
+                logger.warning(f"Integrity constraint violation (not URL): {e}")
+                return None
+        except Exception as e:
+            # Catch any other errors (encoding, database issues, etc.)
+            logger.error(f"Error inserting job with URL '{job_data.get('url')}': {e}", exc_info=True)
             return None
     
 
@@ -762,3 +778,73 @@ class JobsDB:
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
+    
+    def verify_database(self) -> Dict[str, Any]:
+        """
+        Verify the database structure and return statistics.
+        
+        Returns:
+            Dictionary with verification results including:
+            - tables_exist: List of tables found
+            - jobs_count: Number of jobs in database
+            - departments_count: Number of departments
+            - locations_count: Number of locations
+            - sample_job: A sample job record (if any exist)
+        """
+        result = {
+            'tables_exist': [],
+            'jobs_count': 0,
+            'departments_count': 0,
+            'locations_count': 0,
+            'sample_job': None,
+            'errors': []
+        }
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            try:
+                # Get all tables
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                )
+                result['tables_exist'] = [row[0] for row in cursor.fetchall()]
+                
+                # Count jobs
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM jobs")
+                    result['jobs_count'] = cursor.fetchone()[0]
+                except sqlite3.OperationalError as e:
+                    result['errors'].append(f"Error counting jobs: {e}")
+                
+                # Count departments
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM departments")
+                    result['departments_count'] = cursor.fetchone()[0]
+                except sqlite3.OperationalError as e:
+                    result['errors'].append(f"Error counting departments: {e}")
+                
+                # Count locations
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM locations")
+                    result['locations_count'] = cursor.fetchone()[0]
+                except sqlite3.OperationalError as e:
+                    result['errors'].append(f"Error counting locations: {e}")
+                
+                # Get a sample job
+                try:
+                    cursor.execute("SELECT * FROM jobs LIMIT 1")
+                    row = cursor.fetchone()
+                    if row:
+                        result['sample_job'] = dict(row)
+                except sqlite3.OperationalError as e:
+                    result['errors'].append(f"Error fetching sample job: {e}")
+            finally:
+                conn.close()
+                
+        except Exception as e:
+            result['errors'].append(f"Database connection error: {e}")
+        
+        return result

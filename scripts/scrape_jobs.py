@@ -75,6 +75,7 @@ class JobExtractor:
                         'uid': job.get('uid'),
                         'url': job.get('url_comeet_hosted_page'),
                         'company_name': job.get('company_name'),
+                        'email': job.get('email'),
                         'last_updated': job.get('time_updated'),
                         'description': self._parse_custom_fields(job.get('custom_fields', {}))
                     }
@@ -246,17 +247,21 @@ def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.
     Returns:
         Tuple of (jobs_inserted, jobs_skipped) where:
         - jobs_inserted: Number of new jobs successfully inserted
-        - jobs_skipped: Number of jobs skipped (duplicates)
+        - jobs_skipped: Number of jobs skipped (duplicates or errors)
     """
     logger = logger or setup_logging()
     inserted = 0
     skipped = 0
     
     for job in jobs:
-        job_id = jobs_db.insert_job(job)
-        if job_id:
-            inserted += 1
-        else:
+        try:
+            job_id = jobs_db.insert_job(job)
+            if job_id:
+                inserted += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
             skipped += 1
     
     return inserted, skipped
