@@ -52,3 +52,15 @@ def get_search_queries_schema():
 def get_companies_schema():
     """Return the SQL schema for companies table in companies.db"""
     return COMPANIES_SCHEMA
+
+
+def get_jobs_schema():
+    """Return the SQL schema for jobs.db from the schema file"""
+    import os
+    schema_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'db', 'schema', 'jobs_schema.sql'
+    )
+    with open(schema_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
