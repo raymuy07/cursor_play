@@ -22,9 +22,10 @@ from scripts.utils import load_config, setup_logging
 class JobExtractor:
     """Extract job information from HTML using multiple parsing strategies."""
     
-    def __init__(self, html_content: str):
+    def __init__(self, html_content: str, logger: Optional[logging.Logger] = None):
         self.html_content = html_content
         self.soup = BeautifulSoup(html_content, 'html.parser')
+        self.logger = logger or setup_logging()
     
     def extract_jobs(self) -> List[Dict]:
         """
@@ -81,7 +82,7 @@ class JobExtractor:
                 
                 return jobs
         except (json.JSONDecodeError, AttributeError) as e:
-            print(f"Error parsing JS variable: {e}")
+            self.logger.warning(f"Error parsing JS variable: {e}")
         
         return []
     
@@ -266,8 +267,9 @@ def save_jobs_to_db(jobs: List[Dict], source: str = 'comeet') -> tuple[int, int]
     return 0, 0
 
 
-def load_existing_jobs(filepath: str) -> List[Dict]:
+def load_existing_jobs(filepath: str, logger: Optional[logging.Logger] = None) -> List[Dict]:
     """Load existing jobs from file if it exists."""
+    logger = logger or setup_logging()
     if os.path.exists(filepath):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -278,7 +280,7 @@ def load_existing_jobs(filepath: str) -> List[Dict]:
                         job['url_hash'] = generate_url_hash(job.get('url', ''))
                 return jobs
         except json.JSONDecodeError:
-            print(f"Warning: Could not parse {filepath}, starting with empty list")
+            logger.warning(f"Could not parse {filepath}, starting with empty list")
             return []
     return []
 
@@ -351,7 +353,7 @@ def run_scrape() -> None:
                 f"rate_limit={config['rate_limit_delay']}s, timeout={config['request_timeout']}s")
 
     jobs_json_path = os.path.join('data', 'jobs_raw.json')
-    existing_jobs = load_existing_jobs(jobs_json_path)
+    existing_jobs = load_existing_jobs(jobs_json_path, logger)
     logger.info(f"Loaded {len(existing_jobs)} existing jobs from {jobs_json_path}")
 
     db = CompaniesDB()
@@ -401,7 +403,7 @@ def run_scrape() -> None:
             time.sleep(config['rate_limit_delay'])
             continue
 
-        extractor = JobExtractor(html)
+        extractor = JobExtractor(html, logger=logger)
         extracted = extractor.extract_jobs() or []
         extracted = enrich_jobs_with_company(extracted, company)
         extracted = add_hash_to_jobs(extracted)
