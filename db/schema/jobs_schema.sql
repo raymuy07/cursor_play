@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     
     -- Content
     description TEXT,                   -- Full job description for embedding/matching
+    embedding BLOB,                     -- Vector embedding of description (numpy array as pickle)
     
     -- Source tracking
     uid TEXT,                           -- Source's unique identifier
