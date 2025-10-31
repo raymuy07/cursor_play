@@ -47,11 +47,6 @@ class TextEmbedder:
             model_name: Name of the sentence-transformer model to use
             logger: Optional logger instance
         """
-        if SentenceTransformer is None:
-            raise ImportError(
-                "sentence-transformers is required for embedding generation. "
-                "Install it with: pip install sentence-transformers"
-            )
         
         self.model_name = model_name
         self.logger = logger or setup_logging()

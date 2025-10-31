@@ -106,17 +106,7 @@ def process_jobs_with_embeddings(
 
 def main():
     """Main function to process jobs and generate embeddings."""
-    
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Generate embeddings for jobs in database')
-    parser.add_argument('--batch-size', type=int, default=10,
-                       help='Number of jobs to process before logging progress (default: 10)')
-    parser.add_argument('--delay', type=float, default=1.0,
-                       help='Delay between processing jobs in seconds (default: 1.0)')
-    parser.add_argument('--max-jobs', type=int, default=None,
-                       help='Maximum number of jobs to process (default: all)')
-    args = parser.parse_args()
-    
+     
     # Load configuration
     try:
         logger = setup_logging()
