@@ -1,0 +1,7 @@
+---
+alwaysApply: false
+---
+- Database operations go through `scripts/db_utils.py`
+- All scripts should use `config.yaml` for configuration
+- Test fixtures belong in `tests/fixtures/`
+- Logging goes to `logs/jobhunter.log`
