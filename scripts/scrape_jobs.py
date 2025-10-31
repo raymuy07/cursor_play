@@ -234,10 +234,52 @@ def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
     return jobs
 
 
-def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.Logger] = None) -> tuple[int, int]:
+def is_hebrew_job(job: Dict) -> bool:
+    """
+    Check if a job contains Hebrew text.
+    
+    Args:
+        job: Job dictionary with title, description, location, etc.
+        
+    Returns:
+        True if job appears to be in Hebrew, False otherwise
+    """
+    # Check multiple fields for Hebrew characters
+    # Handle description which might be a dict
+    description = job.get('description', '')
+    if isinstance(description, dict):
+        description = ' '.join(str(v) for v in description.values() if v)
+    
+    fields_to_check = [
+        job.get('title', ''),
+        description,
+        job.get('location', ''),
+        job.get('company_name', '')
+    ]
+    
+    # Combine all text fields
+    combined_text = ' '.join(str(field) for field in fields_to_check if field)
+    
+    if not combined_text:
+        return False
+    
+    # Count Hebrew characters
+    hebrew_chars = sum(1 for c in combined_text if '\u0590' <= c <= '\u05FF')
+    total_alpha_chars = sum(1 for c in combined_text if c.isalpha())
+    
+    # If more than 10% of alphabetic characters are Hebrew, consider it a Hebrew job
+    if total_alpha_chars > 0:
+        hebrew_ratio = hebrew_chars / total_alpha_chars
+        return hebrew_ratio > 0.1
+    
+    return False
+
+
+def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.Logger] = None) -> tuple[int, int, int]:
     """
     Save jobs to the jobs database using JobsDB.
     Automatically handles duplicate detection (via URL uniqueness).
+    Filters out Hebrew jobs.
     
     Args:
         jobs: List of job dictionaries to save
@@ -245,15 +287,26 @@ def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.
         logger: Optional logger instance
         
     Returns:
-        Tuple of (jobs_inserted, jobs_skipped) where:
+        Tuple of (jobs_inserted, jobs_skipped, hebrew_jobs_count) where:
         - jobs_inserted: Number of new jobs successfully inserted
         - jobs_skipped: Number of jobs skipped (duplicates or errors)
+        - hebrew_jobs_count: Number of Hebrew jobs filtered out
     """
     logger = logger or setup_logging()
     inserted = 0
     skipped = 0
+    hebrew_count = 0
     
+    # Filter out Hebrew jobs
+    english_jobs = []
     for job in jobs:
+        if is_hebrew_job(job):
+            hebrew_count += 1
+        else:
+            english_jobs.append(job)
+    
+    # Process only English jobs
+    for job in english_jobs:
         try:
             job_id = jobs_db.insert_job(job)
             if job_id:
@@ -264,7 +317,7 @@ def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.
             logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
             skipped += 1
     
-    return inserted, skipped
+    return inserted, skipped, hebrew_count
 
 
 def get_scraping_config() -> Dict:
@@ -407,8 +460,10 @@ def run_scrape() -> None:
 
     # Save all extracted jobs to database (duplicate handling is automatic)
     if new_jobs_total:
-        inserted, skipped = save_jobs_to_db(new_jobs_total, jobs_db, logger)
+        inserted, skipped, hebrew_count = save_jobs_to_db(new_jobs_total, jobs_db, logger)
         logger.info(f"Saved {inserted} new jobs to database ({skipped} duplicates skipped)")
+        if hebrew_count > 0:
+            logger.info(f"{hebrew_count} Hebrew jobs were found and not inserted to jobs.db")
     else:
         logger.info("No new jobs to save.")
 
