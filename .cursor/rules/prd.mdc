@@ -1,0 +1,22 @@
+# Project Overview
+- Automates discovery of company job pages, scraping listings, and persisting them in SQLite (`scripts/db_utils.py`)
+- Supports filtering, vector similarity matching, and AI-powered job scoring against user CVs
+- Embeddings computed once and reused: job embeddings pre-computed at ingestion, CV embeddings per user
+
+
+# Data Flow
+1.**Data Fetching and ingestion**
+- `scripts/discover_companies.py` seeds `companies.db` with sources from external search.
+- `scripts/scrape_jobs.py` pulls postings into SQLite and enriches them with metadata.
+
+2. **Matching Pipeline**
+   - User applies filters (location, department, etc.) → SQL WHERE clauses reduce search space
+   - `scripts/embed_cv.py` generates CV embedding (computed once per CV upload)
+   - Vector similarity search on filtered jobs → ranks all candidates
+   - Top N candidates passed to AI API for detailed scoring
+   - Results cached for pagination without re-computation
+
+# Architecture Decisions
+- **Single centralized job DB** with pre-computed embeddings (not per-user DBs)
+- **Filter → Embed → AI scoring** pipeline minimizes expensive operations
+- **Lazy AI scoring**: Vector similarity on all filtered results (fast), AI scoring only on displayed results (expensive)
