@@ -1,5 +1,6 @@
 ---
 alwaysApply: true
 ---
-When asked to plan refrence @prd.mdc
+- When asked to plan refrence @prd.mdc, then if asked to build, create a new branch with relevant name, checkout, and then build
+
 

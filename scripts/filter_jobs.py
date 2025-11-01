@@ -4,7 +4,6 @@ Filter Jobs Script
 Filters raw job data based on user preferences (department, location, etc.)
 """
 
-import json
 import sys
 import os
 from typing import List, Dict, Set
