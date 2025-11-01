@@ -122,14 +122,14 @@ CREATE INDEX IF NOT EXISTS idx_jobs_dept_experience ON jobs(department_id, exper
 
 -- Insert canonical departments
 INSERT OR IGNORE INTO departments (canonical_name, category) VALUES
-    ('Engineering', 'Engineering'),
-    ('Software Development', 'Engineering'),
-    ('Research & Development', 'Engineering'),
+    ('Engineering', 'R&D'),
+    ('Software Development', 'R&D'),
+    ('Research & Development', 'R&D'),
     ('Product Management', 'Product'),
     ('Design', 'Product'),
-    ('Data Science', 'Engineering'),
-    ('Quality Assurance', 'Engineering'),
-    ('DevOps', 'Engineering'),
+    ('Data Science', 'R&D'),
+    ('Quality Assurance', 'R&D'),
+    ('DevOps', 'R&D'),
     ('Marketing', 'Marketing'),
     ('Sales', 'Sales'),
     ('Business Development', 'Sales'),
@@ -153,8 +153,6 @@ UNION ALL
 SELECT 'Engineering', id FROM departments WHERE canonical_name = 'Engineering'
 UNION ALL
 SELECT 'Software Engineering', id FROM departments WHERE canonical_name = 'Software Development'
-UNION ALL
-SELECT 'Development', id FROM departments WHERE canonical_name = 'Software Development'
 UNION ALL
 SELECT 'SWE', id FROM departments WHERE canonical_name = 'Software Development'
 UNION ALL
