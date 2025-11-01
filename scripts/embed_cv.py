@@ -30,8 +30,61 @@ except ImportError:
 
 try:
     from sentence_transformers import SentenceTransformer
+    import numpy as np
 except ImportError:
     SentenceTransformer = None
+    np = None
+
+
+class TextEmbedder:
+    """Shared base class for generating text embeddings using sentence-transformers."""
+    
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", logger: Optional[logging.Logger] = None):
+        """
+        Initialize TextEmbedder with a specific model.
+        
+        Args:
+            model_name: Name of the sentence-transformer model to use
+            logger: Optional logger instance
+        """
+        
+        self.model_name = model_name
+        self.logger = logger or setup_logging()
+        self.logger.info(f"Loading sentence-transformer model: {model_name}...")
+        
+        try:
+            self.model = SentenceTransformer(model_name)
+            self.logger.info(
+                f"Model loaded successfully. Embedding dimension: {self.model.get_sentence_embedding_dimension()}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error loading model {model_name}: {str(e)}")
+    
+    def embed_text(self, text: str) -> np.ndarray:
+        """
+        Generate embedding for the given text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            1D numpy array containing the embedding vector
+        """
+        if not text or not text.strip():
+            raise ValueError("Cannot generate embeddings for empty text")
+        
+        self.logger.debug(f"Generating embedding for text ({len(text)} characters)...")
+        
+        try:
+            # Generate embedding (returns 1D numpy array)
+            embedding = self.model.encode(text, convert_to_numpy=True)
+            
+            self.logger.debug(f"Embedding generated successfully. Dimension: {len(embedding)}")
+            
+            return embedding
+            
+        except Exception as e:
+            raise RuntimeError(f"Error generating embedding: {str(e)}")
 
 
 class CVReader:
@@ -169,28 +222,15 @@ class CVEmbedder:
         
         Args:
             model_name: Name of the sentence-transformer model to use
+            logger: Optional logger instance
         """
-        if SentenceTransformer is None:
-            raise ImportError(
-                "sentence-transformers is required for embedding generation. "
-                "Install it with: pip install sentence-transformers"
-            )
-        
+        self.embedder = TextEmbedder(model_name=model_name, logger=logger)
         self.model_name = model_name
         self.logger = logger or setup_logging()
-        self.logger.info(f"Loading sentence-transformer model: {model_name}...")
-        
-        try:
-            self.model = SentenceTransformer(model_name)
-            self.logger.info(
-                f"Model loaded successfully. Embedding dimension: {self.model.get_sentence_embedding_dimension()}"
-            )
-        except Exception as e:
-            raise RuntimeError(f"Error loading model {model_name}: {str(e)}")
     
     def embed_text(self, text: str) -> Dict:
         """
-        Generate embedding for the given text.
+        Generate embedding for the given text with metadata.
         
         Args:
             text: Text to embed
@@ -204,8 +244,8 @@ class CVEmbedder:
         self.logger.info(f"Generating embedding for text ({len(text)} characters)...")
         
         try:
-            # Generate embedding
-            embedding = self.model.encode(text, convert_to_numpy=True)
+            # Generate embedding using shared TextEmbedder
+            embedding = self.embedder.embed_text(text)
             
             # Create result dictionary with metadata
             result = {

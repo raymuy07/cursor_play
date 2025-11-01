@@ -76,12 +76,14 @@ CREATE TABLE IF NOT EXISTS jobs (
     
     -- Content
     description TEXT,                   -- Full job description for embedding/matching
+    embedding BLOB,                     -- Vector embedding of description (numpy array as pickle)
     
     -- Source tracking
     uid TEXT,                           -- Source's unique identifier
     url TEXT UNIQUE NOT NULL,           -- Job posting URL (primary unique identifier)
     url_hash TEXT UNIQUE,               -- MD5 hash of URL
     from_domain TEXT,                   -- e.g., 'comeet.com', 'lever.co'
+    original_website_job_url TEXT,      -- Original job URL from company website (url_active_page or url_detected_page)
     
     -- Metadata
     email TEXT,                         -- Application email if available
@@ -120,14 +122,14 @@ CREATE INDEX IF NOT EXISTS idx_jobs_dept_experience ON jobs(department_id, exper
 
 -- Insert canonical departments
 INSERT OR IGNORE INTO departments (canonical_name, category) VALUES
-    ('Engineering', 'Engineering'),
-    ('Software Development', 'Engineering'),
-    ('Research & Development', 'Engineering'),
+    ('Engineering', 'R&D'),
+    ('Software Development', 'R&D'),
+    ('Research & Development', 'R&D'),
     ('Product Management', 'Product'),
     ('Design', 'Product'),
-    ('Data Science', 'Engineering'),
-    ('Quality Assurance', 'Engineering'),
-    ('DevOps', 'Engineering'),
+    ('Data Science', 'R&D'),
+    ('Quality Assurance', 'R&D'),
+    ('DevOps', 'R&D'),
     ('Marketing', 'Marketing'),
     ('Sales', 'Sales'),
     ('Business Development', 'Sales'),
@@ -151,8 +153,6 @@ UNION ALL
 SELECT 'Engineering', id FROM departments WHERE canonical_name = 'Engineering'
 UNION ALL
 SELECT 'Software Engineering', id FROM departments WHERE canonical_name = 'Software Development'
-UNION ALL
-SELECT 'Development', id FROM departments WHERE canonical_name = 'Software Development'
 UNION ALL
 SELECT 'SWE', id FROM departments WHERE canonical_name = 'Software Development'
 UNION ALL

@@ -77,6 +77,7 @@ class JobExtractor:
                         'company_name': job.get('company_name'),
                         'email': job.get('email'),
                         'last_updated': job.get('time_updated'),
+                        'original_website_job_url': self._get_original_website_url(job),
                         'description': self._parse_custom_fields(job.get('custom_fields', {}))
                     }
                     jobs.append(job_info)
@@ -165,6 +166,23 @@ class JobExtractor:
         
         return jobs
     
+    
+    def _get_original_website_url(self, job: Dict) -> Optional[str]:
+        """
+        Get the original website job URL, but only if it's different from the main URL.
+        """
+        main_url = job.get('url_comeet_hosted_page')
+        url_active = job.get('url_active_page')
+        url_detected = job.get('url_detected_page')
+        
+        # Try url_active_page first, then url_detected_page
+        original_url = url_active or url_detected
+        
+        # Only return if it's different from the main URL
+        if original_url and original_url != main_url:
+            return original_url
+        
+        return None
     
     def _parse_location(self, location_dict: Dict) -> str:
         """Parse location dictionary into readable string."""

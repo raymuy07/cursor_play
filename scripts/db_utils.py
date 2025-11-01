@@ -544,15 +544,18 @@ class JobsDB:
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+
+                
                 cursor.execute(
                     """
                     INSERT INTO jobs (
                         title, company_name, department, department_id,
                         location, location_id, workplace_type, experience_level,
                         employment_type, publish_date, description, uid,
-                        url, url_hash, from_domain, email, is_ai_inferred
+                        url, url_hash, from_domain, email, is_ai_inferred,
+                        original_website_job_url
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job_data.get('title'),
@@ -571,7 +574,8 @@ class JobsDB:
                         url_hash,
                         from_domain,
                         job_data.get('email'),
-                        job_data.get('is_ai_inferred', False)
+                        job_data.get('is_ai_inferred', False),
+                        job_data.get('original_website_job_url')
                     )
                 )
                 return cursor.lastrowid
@@ -591,7 +595,83 @@ class JobsDB:
             logger.error(f"Error inserting job with URL '{job_data.get('url')}': {e}", exc_info=True)
             return None
     
-
+    def update_job_embedding(self, job_id: int, embedding: bytes) -> bool:
+        """
+        Update the embedding for a specific job.
+        
+        Args:
+            job_id: ID of the job to update
+            embedding: Pickled numpy array as bytes (BLOB)
+            
+        Returns:
+            True if job was updated, False otherwise
+        """
+        try:
+            with get_db_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE jobs
+                    SET embedding = ?
+                    WHERE id = ?
+                    """,
+                    (embedding, job_id)
+                )
+                return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error updating embedding for job ID {job_id}: {e}", exc_info=True)
+            return False
+    
+    def get_jobs_without_embeddings(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Get jobs that don't have embeddings yet.
+        
+        Args:
+            limit: Optional limit on number of results
+            
+        Returns:
+            List of job records as dictionaries
+        """
+        # Ensure embedding column exists (for existing databases)
+        self._ensure_embedding_column()
+        
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT * FROM jobs 
+                WHERE embedding IS NULL 
+                AND description IS NOT NULL 
+                AND description != ''
+                ORDER BY scraped_at DESC
+            """
+            
+            if limit:
+                query += f" LIMIT {limit}"
+            
+            cursor.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def _ensure_embedding_column(self):
+        """
+        Ensure the embedding column exists in the jobs table.
+        Adds it if missing (for existing databases that don't have it yet).
+        """
+        try:
+            with get_db_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                # Check if column exists by trying to select it
+                cursor.execute("PRAGMA table_info(jobs)")
+                columns = [row[1] for row in cursor.fetchall()]
+                
+                if 'embedding' not in columns:
+                    logger.info("Adding embedding column to jobs table...")
+                    cursor.execute("ALTER TABLE jobs ADD COLUMN embedding BLOB")
+                    conn.commit()
+                    logger.info("Embedding column added successfully")
+        except Exception as e:
+            # Column might already exist or table might not exist yet
+            logger.debug(f"Embedding column check: {e}")
 
     ##I still dont know if we need this function
     def get_job_by_url(self, url: str) -> Optional[Dict[str, Any]]:
