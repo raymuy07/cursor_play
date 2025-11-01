@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     url TEXT UNIQUE NOT NULL,           -- Job posting URL (primary unique identifier)
     url_hash TEXT UNIQUE,               -- MD5 hash of URL
     from_domain TEXT,                   -- e.g., 'comeet.com', 'lever.co'
+    original_website_job_url TEXT,      -- Original job URL from company website (url_active_page or url_detected_page)
     
     -- Metadata
     email TEXT,                         -- Application email if available

@@ -8,6 +8,9 @@ import requests
 import json
 import time
 from typing import List, Dict
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.utils import load_config, setup_logging
 from scripts.db_utils import SearchQueriesDB, CompaniesDB, initialize_database, SEARCH_QUERIES_DB, COMPANIES_DB
 from scripts.db_schema import get_search_queries_schema, get_companies_schema
@@ -70,7 +73,7 @@ def discover_companies() -> List[Dict]:
             logger.error(f"Error searching {domain}: {e}")
         
         # Rate limiting between domains
-        time.sleep(config['scraping']['rate_limit_delay'])
+        time.sleep(config['company_scraping']['between_domains_delay'])
     
     # Get final count
     final_count = companies_db.count_companies()
@@ -150,7 +153,7 @@ def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueri
                 break
             
             # Rate limiting between pages
-            time.sleep(config['scraping']['rate_limit_delay'])
+            time.sleep(config['company_scraping']['between_pages_delay'])
             
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed for {domain} page {page}: {e}")

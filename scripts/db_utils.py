@@ -544,15 +544,18 @@ class JobsDB:
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+
+                
                 cursor.execute(
                     """
                     INSERT INTO jobs (
                         title, company_name, department, department_id,
                         location, location_id, workplace_type, experience_level,
                         employment_type, publish_date, description, uid,
-                        url, url_hash, from_domain, email, is_ai_inferred
+                        url, url_hash, from_domain, email, is_ai_inferred,
+                        original_website_job_url
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job_data.get('title'),
@@ -571,7 +574,8 @@ class JobsDB:
                         url_hash,
                         from_domain,
                         job_data.get('email'),
-                        job_data.get('is_ai_inferred', False)
+                        job_data.get('is_ai_inferred', False),
+                        job_data.get('original_website_job_url')
                     )
                 )
                 return cursor.lastrowid

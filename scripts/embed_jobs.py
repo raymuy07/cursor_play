@@ -123,15 +123,15 @@ def main():
     
     # Get configuration values
     model_name = job_config.get('model_name') or cv_config.get('model_name', 'all-MiniLM-L6-v2')
-    batch_size = job_config.get('batch_size', args.batch_size)
-    delay_seconds = job_config.get('delay_seconds', args.delay)
-    max_jobs = args.max_jobs or job_config.get('max_jobs')
+    batch_size = job_config.get('batch_size')
+    delay_seconds = job_config.get('delay_seconds')
+    max_jobs = job_config.get('max_jobs')
     
     logger.info(f"Configuration:")
     logger.info(f"  Model: {model_name}")
     logger.info(f"  Batch size: {batch_size}")
     logger.info(f"  Delay: {delay_seconds} seconds")
-    logger.info(f"  Max jobs: {max_jobs or 'all'}")
+    logger.info(f"  Max jobs: {max_jobs}")
     
     try:
         # Initialize database and embedder
