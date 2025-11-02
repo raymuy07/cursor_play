@@ -244,8 +244,7 @@ def main():
     
     # Define filters
     filters = {
-        'location': ['Tel Aviv'],
-        'employment_type': ['Full-time']
+        'location': ['Tel Aviv']
     }
     
     logger.info(f"Applying filters: {filters}")
