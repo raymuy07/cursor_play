@@ -4,45 +4,47 @@ Utility Functions
 Common helper functions used across scripts
 """
 
-import yaml
 import json
 import logging
-import requests
 import time
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
+from dynaconf import Dynaconf
+
 
 _LOGGER: Optional[logging.Logger] = None
+_SETTINGS: Optional[Dynaconf] = None
 
 
 def load_config() -> Dict[str, Any]:
     """
-    Load configuration from config.yaml
+    Load configuration using Dynaconf combining YAML and environment variables.
     """
-    config_path = Path('config.yaml')
-    if not config_path.exists():
-        raise FileNotFoundError("config.yaml not found")
-    
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    # Load environment variables for sensitive data
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    # Replace placeholders with environment variables
-    if 'openai_api_key' in config:
-        config['openai_api_key'] = os.getenv('OPENAI_API_KEY', config['openai_api_key'])
-    if 'telegram_bot_token' in config:
-        config['telegram_bot_token'] = os.getenv('TELEGRAM_BOT_TOKEN', config['telegram_bot_token'])
-    if 'telegram_chat_id' in config:
-        config['telegram_chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['telegram_chat_id'])
-    if 'serper_api_key' in config:
-        config['serper_api_key'] = os.getenv('SERPER_API_KEY', config['serper_api_key'])
-    
-    return config
+    global _SETTINGS
+
+    if _SETTINGS is None:
+        base_dir = Path(__file__).resolve().parents[1]
+        config_path = base_dir / 'config.yaml'
+
+        if not config_path.exists():
+            raise FileNotFoundError('config.yaml not found')
+
+        dotenv_path = base_dir / '.env'
+
+        dynaconf_kwargs: Dict[str, Any] = {
+            'envvar_prefix': False,
+            'settings_files': [str(config_path)],
+            'load_dotenv': True,
+            'merge_enabled': True,
+        }
+
+        if dotenv_path.exists():
+            dynaconf_kwargs['dotenv_path'] = str(dotenv_path)
+
+        _SETTINGS = Dynaconf(**dynaconf_kwargs)
+
+    return _SETTINGS.as_dict()
 
 
 def setup_logging() -> logging.Logger:
