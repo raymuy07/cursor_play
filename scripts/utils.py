@@ -9,11 +9,21 @@ import json
 import logging
 import requests
 import time
+import sys
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 
 _LOGGER: Optional[logging.Logger] = None
+
+
+class _MaxLevelFilter(logging.Filter):
+    def __init__(self, max_level: int) -> None:
+        super().__init__()
+        self._max_level = max_level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno <= self._max_level
 
 
 def load_config() -> Dict[str, Any]:
@@ -61,24 +71,31 @@ def setup_logging() -> logging.Logger:
         # Fall back to defaults if configuration cannot be loaded
         log_config = {}
 
-    Path('logs').mkdir(exist_ok=True)
-
     logger = logging.getLogger('jobhunter')
     logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
     logger.propagate = False
 
     if not logger.handlers:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            log_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        )
 
-        file_path = log_config.get('file', 'logs/jobhunter.log')
-        file_handler = logging.FileHandler(file_path)
-        file_handler.setFormatter(formatter)
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(logging.DEBUG)
+        stdout_handler.addFilter(_MaxLevelFilter(logging.WARNING - 1))
+        stdout_handler.setFormatter(formatter)
 
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(formatter)
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.WARNING)
+        stderr_handler.setFormatter(formatter)
 
-        logger.addHandler(file_handler)
-        logger.addHandler(stream_handler)
+        logger.addHandler(stdout_handler)
+        logger.addHandler(stderr_handler)
+
+        if log_config.get('file'):
+            logger.warning(
+                "File logging is no longer enabled by default; stream handlers are used instead."
+            )
 
     _LOGGER = logger
     return _LOGGER
