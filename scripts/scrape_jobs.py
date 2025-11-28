@@ -193,7 +193,10 @@ class JobExtractor:
         if location_dict.get('city'):
             parts.append(location_dict['city'])
         if location_dict.get('country'):
-            parts.append(location_dict['country'])
+            if location_dict['country'] == 'IL':
+                parts.append("ISRAEL")
+            else:
+                parts.append(location_dict['country'])
         
         if location_dict.get('is_remote'):
             parts.append("(Remote)")
@@ -228,7 +231,8 @@ class JobExtractor:
                 
                 if found:
                     return found.get_text(strip=True)
-            except:
+            except Exception as e:
+                self.logger.warning(f"Error extracting text from element: {e}")
                 continue
         return None
     
@@ -252,7 +256,7 @@ def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
     return jobs
 
 
-def is_hebrew_job(job: Dict) -> bool:
+def job_is_hebrew_filter(job: Dict) -> bool:
     """
     Check if a job contains Hebrew text.
     
@@ -292,6 +296,11 @@ def is_hebrew_job(job: Dict) -> bool:
     
     return False
 
+def is_in_israel_filter(job: Dict) -> bool:
+
+    location = job.get('location', '')
+    return "ISRAEL" in location
+
 
 def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
     """
@@ -307,12 +316,19 @@ def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
     valid_jobs = []
     filter_counts = {
         'hebrew': 0,
-        'general_department': 0
+        'general_department': 0,
+        'job_not_in_israel': 0
     }
 
     for job in jobs:
+        
+        # Filter: Jobs not in Israel
+        if not is_in_israel_filter(job):
+            filter_counts['job_not_in_israel'] += 1
+            continue
+        
         # Filter: Hebrew jobs
-        if is_hebrew_job(job):
+        if job_is_hebrew_filter(job):
             filter_counts['hebrew'] += 1
             continue
 
@@ -329,7 +345,7 @@ def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
 
     return valid_jobs, filter_counts
 
-def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.Logger] = None) -> tuple[int, int, int, int]:
+def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.Logger] = None) -> tuple[bool, int, int]:
     """
     Save jobs to the jobs database using JobsDB.
     Automatically handles duplicate detection (via URL uniqueness).
@@ -341,21 +357,19 @@ def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.
         logger: Optional logger instance
         
     Returns:
-        Tuple of (jobs_inserted, jobs_skipped, hebrew_jobs_count, general_dept_count) where:
+        Tuple of (success, jobs_inserted, jobs_skipped) where:
+        - success: True if save operation completed without critical errors
         - jobs_inserted: Number of new jobs successfully inserted
         - jobs_skipped: Number of jobs skipped (duplicates or errors)
-        - hebrew_jobs_count: Number of Hebrew jobs filtered out
-        - general_dept_count: Number of "General" department jobs filtered out
     """
     logger = logger or setup_logging()
     inserted = 0
     skipped = 0
+    errors = 0
     
     # Filter out invalid jobs using external filtering function
     valid_jobs, filter_counts = filter_valid_jobs(jobs)
-    hebrew_count = filter_counts.get('hebrew', 0)
-    general_dept_count = filter_counts.get('general_department', 0)
-    
+    logger.info(f"Filter counts: {filter_counts}")
     # Process only valid jobs
     for job in valid_jobs:
         try:
@@ -367,8 +381,12 @@ def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB, logger: Optional[logging.
         except Exception as e:
             logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
             skipped += 1
+            errors += 1
     
-    return inserted, skipped, hebrew_count, general_dept_count
+    # Success if we processed jobs without too many errors (allow some failures)
+    success = errors == 0 or (errors < len(valid_jobs) * 0.5)  # Fail if >50% errors
+    
+    return success, inserted, skipped
 
 
 def get_scraping_config() -> Dict:
@@ -437,10 +455,10 @@ def save_scraped_jobs_to_temp(jobs: List[Dict], temp_file_path: Optional[str] = 
     """
     if temp_file_path is None:
         # Generate timestamped temp file in data directory
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-        os.makedirs(data_dir, exist_ok=True)
+        tmp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'temp')
+        os.makedirs(tmp_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        temp_file_path = os.path.join(data_dir, f'temp_scraped_jobs_{timestamp}.json')
+        temp_file_path = os.path.join(tmp_dir, f'temp_scraped_jobs_{timestamp}.json')
     
     try:
         with open(temp_file_path, 'w', encoding='utf-8') as f:
@@ -452,67 +470,30 @@ def save_scraped_jobs_to_temp(jobs: List[Dict], temp_file_path: Optional[str] = 
         raise
 
 
-def load_scraped_jobs_from_temp(temp_file_path: str) -> List[Dict]:
-    """
-    Load scraped jobs from a temporary JSON file.
+def recover_temp_files(jobs_db: JobsDB, logger) -> None:
+    """Recover jobs from temp files and insert them into the database"""
     
-    Args:
-        temp_file_path: Path to the temporary JSON file
-        
-    Returns:
-        List of job dictionaries loaded from the file
-        
-    Example:
-        >>> jobs = load_scraped_jobs_from_temp('data/temp_scraped_jobs_20251102_123456.json')
-        >>> len(jobs)  # Number of jobs loaded
-    """
     try:
-        with open(temp_file_path, 'r', encoding='utf-8') as f:
-            jobs = json.load(f)
-        return jobs
+        tmp_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'temp')
+        os.makedirs(tmp_path, exist_ok=True)
+        for tmp_file in os.listdir(tmp_path):
+            tmp_file_path = os.path.join(tmp_path, tmp_file)
+            logger.info(f"Temp file exists: {tmp_file}, Retrying insertion")
+            with open(tmp_file_path, 'r', encoding='utf-8') as f:
+                jobs = json.load(f)
+                logger.info(f"Loaded {len(jobs)} jobs from temp file")
+                success, inserted, skipped= save_jobs_to_db(jobs, jobs_db, logger)
+                if success:
+                    logger.info(f"Successfully inserted {inserted} jobs from temp file ({skipped} skipped)")
+                    os.remove(tmp_file_path)
+                    logger.info(f"Temp file deleted: {tmp_file_path}")
+                else:
+                    logger.error(f"Failed to insert jobs from temp file: {tmp_file_path}")
     except Exception as e:
-        logger = setup_logging()
-        logger.error(f"Failed to load scraped jobs from temp file '{temp_file_path}': {e}")
+        logger.error(f"Failed to load scraped jobs from temp file: {e}")
         raise
 
-
-def retry_insert_from_temp(temp_file_path: str) -> tuple[int, int, int, int]:
-    """
-    Retry inserting jobs from a temporary file to the database.
-    Useful when initial insertion failed and you want to retry.
-    
-    Args:
-        temp_file_path: Path to the temporary JSON file containing scraped jobs
-        
-    Returns:
-        Tuple of (jobs_inserted, jobs_skipped, hebrew_jobs_count, general_dept_count)
-        
-    Example:
-        >>> insert_from_temp('data/temp_scraped_jobs_20251102_123456.json')
-        (15, 2, 1, 0)  # 15 inserted, 2 skipped, 1 Hebrew, 0 General
-    """
-    logger = setup_logging()
-    jobs_db = JobsDB()
-    
-    logger.info(f"Retrying insertion from temp file: {temp_file_path}")
-    jobs = load_scraped_jobs_from_temp(temp_file_path)
-    logger.info(f"Loaded {len(jobs)} jobs from temp file")
-    
-    return save_jobs_to_db(jobs, jobs_db, logger)
-
-
-def run_scrape() -> None:
-    """Main scraping workflow orchestrating DB scheduling and rate limiting."""
-    logger = setup_logging()
-    config = get_scraping_config()
-    
-    logger.info(f"Starting scrape with config: max_companies={config['max_companies_per_run']}, "
-                f"rate_limit={config['rate_limit_delay']}s, timeout={config['request_timeout']}s")
-
-    # Initialize database connections
-    companies_db = CompaniesDB()
-    jobs_db = JobsDB()
-    
+def select_companies_to_scrape(companies_db: CompaniesDB, config: Dict, logger) -> List[Dict]: 
     # Attempt DB-side selection; if not supported, fall back to Python filtering
     try:
         to_scrape = companies_db.get_companies_to_scrape(
@@ -538,75 +519,107 @@ def run_scrape() -> None:
         return
 
     logger.info(f"Preparing to scrape {len(to_scrape)} company pages")
+    return to_scrape
 
-    session = requests.Session()
+
+def scrape_jobs_from_companies(companies: List[Dict], config: Dict, companies_db: CompaniesDB, logger) -> List[Dict]:
+    
     new_jobs_total: List[Dict] = []
-
-    for idx, company in enumerate(to_scrape, start=1):
-        url = company.get('job_page_url')
-        if not url:
-            continue
-
-        # Rotate user agents for better stealth
-        user_agent = random.choice(config['user_agents'])
-        
-        logger.info(f"[{idx}/{len(to_scrape)}] Fetching {url}")
-        html = fetch_html(url, session, config['request_timeout'], user_agent)
-        if not html:
-            logger.warning(f"Failed to fetch HTML from {url}")
-            # Respect rate limit even on failure
-            time.sleep(config['rate_limit_delay'])
-            continue
-
-        extractor = JobExtractor(html, logger=logger)
-        extracted = extractor.extract_jobs() or []
-        extracted = enrich_jobs_with_company(extracted, company)
-        extracted = add_hash_to_jobs(extracted)
-
-        if extracted:
-            logger.info(f"Extracted {len(extracted)} jobs from {url}")
-        else:
-            logger.info(f"No jobs found for {url}")
-
-        # Accumulate jobs for batch insertion
-        new_jobs_total.extend(extracted)
-
-        # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
-        try:
-            companies_db.update_last_scraped(url)
-        except Exception as e:
-            logger.warning(f"Could not update last_scraped for {url}: {e}")
-
-        # Rate limit between requests
-        time.sleep(config['rate_limit_delay'])
-
-    # Save all extracted jobs to temporary file first (to preserve if DB insertion fails)
-    if not new_jobs_total:
-        logger.info("No new jobs to save.")
-        return
-
     temp_file_path = None
-    try:
-        temp_file_path = save_scraped_jobs_to_temp(new_jobs_total)
-        logger.info(f"Saved {len(new_jobs_total)} scraped jobs to temporary file: {temp_file_path}")
-    except Exception as e:
-        logger.error(f"Failed to save scraped jobs to temp file: {e}")
-        logger.error("Scraped jobs may be lost if database insertion fails!")
 
-    try:
-        inserted, skipped, hebrew_count, general_dept_count = save_jobs_to_db(new_jobs_total, jobs_db, logger)
-        logger.info(f"Successfully saved {inserted} new jobs to database ({skipped} duplicates skipped)")
-        if hebrew_count > 0:
-            logger.info(f"{hebrew_count} Hebrew jobs were filtered out")
-        if general_dept_count > 0:
-            logger.info(f"{general_dept_count} 'General' department jobs were filtered out")
+    with requests.Session() as session:
 
-        if temp_file_path and os.path.exists(temp_file_path):
+        for idx, company in enumerate(companies, start=1):
+            url = company.get('job_page_url')
+            if not url:
+                logger.warning(f"Company {company.get('company_name')} has no job page URL")
+                continue
+
+            # Rotate user agents for better stealth
+            user_agent = random.choice(config['user_agents'])
+            
+            logger.info(f"[{idx}/{len(companies)}] Fetching {url}")
+            html = fetch_html(url, session, config['request_timeout'], user_agent)
+            if not html:
+                logger.warning(f"Failed to fetch HTML from {url}")
+                # Respect rate limit even on failure
+                time.sleep(config['rate_limit_delay'])
+                continue
+
+            extractor = JobExtractor(html, logger=logger)
+            extracted = extractor.extract_jobs() or []
+            extracted = enrich_jobs_with_company(extracted, company)
+            extracted = add_hash_to_jobs(extracted)
+
+            if extracted:
+                logger.info(f"Extracted {len(extracted)} jobs from {url}")
+            else:
+                logger.info(f"No jobs found for {url}")
+
+            # Accumulate jobs for batch insertion
+            new_jobs_total.extend(extracted)
+
+            # Update last_scraped only after a successful HTTP fetch (regardless of jobs found)
             try:
-                os.remove(temp_file_path)
-                logger.info(f"Temp file deleted after successful insertion: {temp_file_path}")
-            except OSError as remove_err:
-                logger.warning(f"Failed to delete temp file '{temp_file_path}': {remove_err}")
+                companies_db.update_last_scraped(url)
+            except Exception as e:
+                logger.warning(f"Could not update last_scraped for {url}: {e}")
+
+            # Rate limit between requests
+            time.sleep(config['rate_limit_delay'])
+
+        # Save all extracted jobs to temporary file first (to preserve if DB insertion fails)
+        if not new_jobs_total:
+            logger.info("No new jobs to save.")
+            return
+        try:
+            temp_file_path = save_scraped_jobs_to_temp(new_jobs_total)
+            logger.info(f"Saved {len(new_jobs_total)} scraped jobs to temporary file: {temp_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to save scraped jobs to temp file: {e}")
+            logger.error("Scraped jobs may be lost if database insertion fails!")
+
+        return new_jobs_total, temp_file_path
+# def persist_jobs(jobs: List[Dict], jobs_db: JobsDB, logger) -> None: 
+
+
+def run_scrape() -> None:
+    """Main scraping workflow orchestrating DB scheduling and rate limiting."""
+    logger = setup_logging()
+    config = get_scraping_config()
+    
+    logger.info(f"Starting scrape with config: max_companies={config['max_companies_per_run']}, "
+                f"rate_limit={config['rate_limit_delay']}s, timeout={config['request_timeout']}s")
+
+    # Initialize database connections
+    companies_db = CompaniesDB()
+    jobs_db = JobsDB()
+    
+    """We want to check if there are any jobs in the temp file and if so, try to insert them into the database
+    the existence of a temp file is already a red flag so we should not retry this operation all the time"""   
+    
+    recover_temp_files(jobs_db, logger)
+    
+    to_scrape = select_companies_to_scrape(companies_db, config, logger)
+    new_jobs_total, temp_file_path = scrape_jobs_from_companies(to_scrape, config, companies_db, logger)
+    
+    
+
+
+    try:
+        success, inserted, skipped= save_jobs_to_db(new_jobs_total, jobs_db, logger)
+        if success:
+            logger.info(f"Successfully saved {inserted} new jobs to database ({skipped} duplicates skipped)")
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                    logger.info(f"Temp file deleted after successful insertion: {temp_file_path}")
+                except OSError as remove_err:
+                    logger.warning(f"Failed to delete temp file '{temp_file_path}': {remove_err}")
+        else:
+            logger.error(f"Database insertion had too many errors: {inserted} inserted, {skipped} skipped")
+            if temp_file_path:
+                logger.error(f"Scraped jobs preserved in temp file: {temp_file_path}")
     except Exception as e:
         logger.error(f"CRITICAL: Database insertion failed: {e}", exc_info=True)
         if temp_file_path:
