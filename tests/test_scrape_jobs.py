@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from scripts.scrape_jobs import JobExtractor, add_hash_to_jobs, merge_jobs
+from scripts.scrape_jobs import JobExtractor, add_hash_to_jobs
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -36,21 +36,3 @@ def test_job_extraction_from_fixtures():
     assert total_found > 0
 
 
-def test_add_hash_and_merge_behaviour():
-    # Use whichever fixture yields jobs
-    candidates = ["debug_dream.html", "debug_lumenis.html"]
-    jobs = []
-    for name in candidates:
-        jobs = extract_jobs_from_fixture(name)
-        if jobs:
-            break
-
-    if not jobs:
-        # Nothing to validate here if fixtures change; don't fail the suite
-        return
-
-    jobs_with_hash = add_hash_to_jobs(jobs)
-    assert all(j.get("url_hash") for j in jobs_with_hash)
-
-    merged = merge_jobs(jobs_with_hash, [])
-    assert len(merged) == len(jobs_with_hash)

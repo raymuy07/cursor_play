@@ -6,4 +6,4 @@ alwaysApply: false
 - Follow PEP 8 style guidelines
 - Use type hints where applicable
 - Prefer SQLite for data persistence
-- Use the centralized logging from `scripts/utils.setup_logging()`
+- Use the centralized logging from `scripts/utils.setup_logging()` (stdout/stderr streams)
