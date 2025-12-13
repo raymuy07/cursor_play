@@ -277,6 +277,20 @@ class CompaniesDB:
             )
             return cursor.rowcount > 0
     
+    def delete_company_by_url(self, job_page_url: str) -> bool:
+        """Permanently delete a company record by its job page URL."""
+
+        if not job_page_url:
+            return False
+
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM companies WHERE job_page_url = ?",
+                (job_page_url,),
+            )
+            return cursor.rowcount > 0
+
     def get_company_by_url(self, job_page_url: str) -> Optional[Dict[str, Any]]:
         """
         Get a company by its job page URL.
@@ -692,6 +706,20 @@ class JobsDB:
             )
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    def delete_job_by_url(self, url: str) -> bool:
+        """Delete a job by URL, returning True when a row was removed."""
+
+        if not url:
+            return False
+
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM jobs WHERE url = ?",
+                (url,),
+            )
+            return cursor.rowcount > 0
     
     def get_jobs_by_company(self, company_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """

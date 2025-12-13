@@ -1,0 +1,365 @@
+[
+  {
+    "title": "AI/ML Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "69.747",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/aiml-engineer/69.747",
+    "company_name": "Dream",
+    "email": "dreamgroup.69.747@comeetapply.com",
+    "last_updated": "2025-10-23T12:10:05Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/69.747/ai-ml-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are looking for an experienced AI/ML Engineer to join our Applications team within our platform engineering group. In this role, you'll be responsible for designing, building, deploying, and maintaining production-grade AI systems and ML pipelines. You'll translate cutting-edge data science research into practical, scalable solutions, handling model deployment both in cloud environments and on-premises using GPUs and CUDA. You’ll optimize and implement ML models, workflows, and AI agents to ensure high performance and reliability in production environments.",
+      "responsibilities": "Design, implement, and deploy ML models, AI-driven applications, AI workflows, and LLM-based agents into production. \nBuild, manage, and maintain robust ML pipelines and systems. \nDeploy models on cloud and on-premises GPU servers. \nOptimize system performance, including model inference, scalability, and resource utilization both on cloud and on-premises. \nDevelop and maintain services, APIs and integrate ML models into microservices-based applications. \nCollaborate with cross-functional teams including data science, backend, DevOps, and platform teams. \n Stay up to date with the latest developments in AI, machine learning, and related fields, focusing on LLMs, exploring how emerging technologies can be applied to improve products and services.",
+      "skills": "At least 4-5 years of experience in building ML/AI solutions, specifically in production environment \nStrong experience in building and maintaining scalable machine learning infrastructures\nStrong proficiency in Python \nSolid understanding of Data Science and Machine Learning lifecycle and best practices for model deployment and serving\nExcellent problem-solving abilities, coupled with a creative and strategic mindset \nExtensive experience with ML frameworks \nUnderstanding of microservice design and architecture \nProven ability to work effectively in a team setting\n \nAdvantages: \nFamiliarity with distributed ML tools \nExperience with real-time machine learning model deployment. \nFamiliarity with cybersecurity applications of machine learning \nAdvanced skills in performance optimization for high throughput systems \nTech Stack: \nAWS (SageMaker, Lambda), PyTorch, vLLM, Ray, Hugging Face, Docker, Kubernetes, FastAPI, Flask"
+    },
+    "url_hash": "cc81da2e62cc77ece24d0a04c4b68473"
+  },
+  {
+    "title": "AI/ML Engineer - AI Infra Group",
+    "department": "AI",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "5D.844",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/aiml-engineer---ai-infra-group/5D.844",
+    "company_name": "Dream",
+    "email": "dreamgroup.5D.844@comeetapply.com",
+    "last_updated": "2025-10-24T06:43:46Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/5D.844/ai-ml-engineer-ai-infra-group/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies.  \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.  \nWe’re seeking an experienced \nAI/ML Engineer\n to join our AI Infra Group, the group behind Dream’s next-generation GenAI platform. This group builds scalable, high-performance AI systems for internal users and external customers, designed to run seamlessly across cloud and on-premise environments using the latest hardware advancements.\nIn this role, you’ll lead efforts in distributed training, large-scale inference, resource optimization, and end-to-end model lifecycle management following MLOps best practices. Your work will accelerate research, strengthen production-grade AI infrastructure, and advance Dream’s internal AI ecosystem.",
+      "responsibilities": "Architect and build scalable ML infrastructure for training and inference workloads across heterogeneous compute environments (on-premise and cloud)\nDesign and implement distributed systems to support model lifecycle management - from data ingestion and preprocessing, to training orchestration and deployment\nOptimize performance and cost-efficiency of large-scale model training and serving pipelines using technologies like Ray, Kubernetes, Spark, and GPU schedulers\nCollaborate with AI researchers, data scientists, and product teams to understand their workflows and translate them into reusable platform services and APIs\nDrive adoption of best practices for CI/CD, observability, and reproducibility in ML systems\nContribute to the long-term vision and technical roadmap of the ML platform, ensuring it evolves to meet the growing demands of AI across the company",
+      "skills": "5+ years of experience building large-scale distributed systems or platforms, preferably in ML or data-intensive environments\nProficiency in Python with strong software engineering practices, familiarity with data structures and design patterns\nDeep understanding of orchestration systems (e.g., Kubernetes, Argo) and distributed computing frameworks (e.g., Ray, Spark)\nExperience with GPU compute infrastructure, containerization (Docker), and cloud-native architectures\nProven track record of delivering production-grade infrastructure or developer platforms\nSolid grasp of ML workflows, including model training, evaluation, and inference pipelines"
+    },
+    "url_hash": "a0eda7a6995249305c7b631a47861aee"
+  },
+  {
+    "title": "Automation Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "36.A57",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/automation-engineer/36.A57",
+    "company_name": "Dream",
+    "email": "dreamgroup.36.A57@comeetapply.com",
+    "last_updated": "2025-10-12T09:14:56Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/36.A57/automation-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe’re looking for an experienced \nAutomation Engineer\n to join our QA Automation team and help shape the future of quality at Dream. In this role, you’ll play a critical part in developing innovative testing systems for our SaaS product—ensuring every release is fast, reliable, and built to scale.",
+      "responsibilities": "Lead the design, development, and maintenance of automated tests across UI, API, and integration layers. \nCollaborate closely with developers and QA engineers to define robust test strategies and drive quality from the ground up. \nBuild and evolve scalable, maintainable test frameworks that empower fast and confident delivery. \nIntegrate automation into CI/CD pipelines, maintaining high coverage across services and components. \nParticipate in feature planning to align test efforts early and ensure full lifecycle coverage. \nLeverage infrastructure-as-code and scripting to streamline and optimize testing environments.",
+      "skills": "3+ years of experience in automation development \nStrong programming skills in Python and TypeScript \nProficiency with automation frameworks such as Pytest, Selenium, or Playwright \nExperience with CI/CD tools (e.g., Jenkins, GitHub Actions, TeamCity) \nHands-on with Linux systems and shell scripting \nBackground in testing cloud-based systems (AWS, GCP, or Azure) \nStrong grasp of OOP principles, debugging, and problem-solving \nExcellent communication and a team-first attitude \nNice to Have\n \nFamiliarity with AI tools or MCP \nExperience with infrastructure tools like Docker, Terraform, or Ansible \nComfort working with databases (MongoDB, SQL, Neo4j, etc.) \nExposure to container orchestration systems like Kubernetes \nOur Tech Stack\n \nPython, Pytest, TypeScript, Docker, GitHub, Jenkins, AWS, Terraform, Linux, MongoDB, Redis, RabbitMQ, Kubernetes"
+    },
+    "url_hash": "b98a5e36425fe341e0e3660c4fc49abd"
+  },
+  {
+    "title": "Automation Infrastructure Developer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "30.55E",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/automation-infrastructure-developer/30.55E",
+    "company_name": "Dream",
+    "email": "dreamgroup.30.55E@comeetapply.com",
+    "last_updated": "2025-10-16T06:52:17Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/30.55E/automation-infrastructure-developer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe’re looking for an experienced infrastructure developer to join our QA Automation team. You’ll be a key player in building an innovative automation platform for our SaaS product, ensuring our engineering quality reaches new heights. \nYou will focus on building, maintaining, and enhancing the infrastructure that supports test automation across both backend and frontend. You will be responsible for creating and optimizing tools, frameworks, and pipelines that enable the development and execution of automated tests. This position requires a strong technical background in automation infrastructure, CI/CD integration, and cloud technologies.",
+      "responsibilities": "Design, build, and maintain automation infrastructure that supports automated test execution for UI, API, integration tests and more. \nWork closely with developers and QA teams to integrate automation tools into the CI/CD pipeline, ensuring automated tests run efficiently and reliably. \nManage the underlying infrastructure, including Docker, and cloud-based services, to ensure smooth operation of the test automation framework. \nCreate and optimize tools and scripts that facilitate the development and execution of automated tests (e.g., integrating with GitHub Actions, Jenkins, etc.). \nContinuously monitor the performance of the test infrastructure, troubleshoot issues, and optimize the environment for speed and scalability \nPromote and implement best practices for building and maintaining automation infrastructure, ensuring high standards for reliability and maintainability \nPartner with DevOps, developers, and product managers to define automation strategies and enhance software quality.",
+      "skills": "4+ years of experience in building and maintaining automation infrastructure, CI/CD pipelines, and related tools. \nStrong proficiency in Python and PyTest for automation scripting and framework development. \nExperience with one of the major cloud providers: AWS, GCP, Azure. \nFamiliarity with automation tools and frameworks such as Cypress, Playwright, or similar UI testing frameworks. \nStrong problem-solving skills and the ability to troubleshoot complex infrastructure issues. \nExcellent communication and collaboration skills, with the ability to work with cross-functional teams. \nExperience with usage/developing CI/CD infrastructure for running different types of automation tests (experience with tools such as Docker, GitHub Actions, or Jenkins). \nExperience writing database queries (MongoDB, Neo4J, Clickhouse, etc.). \nTech stack: \nAWS, Kubernetes, EKS, ECS, Jenkins, IaC, GitHub, Terraform, Python, Ansible, Docker+Compose, MongoDB, RabbitMQ, Redis, Go, Neo4J, AI, and more."
+    },
+    "url_hash": "67f86ff7f1414961c469a18d5985e3ad"
+  },
+  {
+    "title": "Data Engineer - AI Infra Group",
+    "department": "AI",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "F9.E54",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/data-engineer---ai-infra-group/F9.E54",
+    "company_name": "Dream",
+    "email": "dreamgroup.F9.E54@comeetapply.com",
+    "last_updated": "2025-10-22T08:58:04Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/F9.E54/data-engineer-ai-infra-group/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies.  \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.  \nWe are looking for a \nData Engineer\n who thrives at the intersection of scalable infrastructure and intelligent systems. Someone who can turn fragmented data into adaptive, self-serve pipelines that power both human analysts and autonomous agents.",
+      "responsibilities": "Design and maintain \nagentic data pipelines\n that adapt dynamically to new sources, schemas, and AI-driven tasks\nBuild \nself-serve data systems\n that allow teams to explore, transform, and analyze data with minimal engineering effort\nDevelop modular, event-based pipelines across \nAWS environments\n, combining cloud flexibility with custom open frameworks\nAutomate ingestion, enrichment, and fusion of cybersecurity data including logs, configs, and CTI streams\nCollaborate closely with AI engineers and researchers to operationalize \nLLM and agent pipelines\n within the CLM ecosystem\nImplement observability, lineage, and data validation to ensure reliability and traceability\nScale systems to handle complex, high-volume data while maintaining adaptability and performance\nOwn the data layer end-to-end including architecture, documentation, and governance",
+      "skills": "3+ years of experience as a \nData Engineer\n or \nBackend Data Developer\nStrong experience with \nPython\n, \nSQL\n, and modern data frameworks such as Airflow, Spark, or dbt\nPractical understanding of \nLLM pipelines\n or \nagent orchestration frameworks\n (LangGraph, LlamaIndex, or similar)\nFamiliarity with various database systems such as Postgres, MongoDB, Elasticsearch, and vector databases\nExperience building scalable data systems in \nAWS\n (EC2, S3, EKS)\nSolid grasp of data modeling, schema evolution, and pipeline observability\nExperience working closely with \nAI and ML teams\nStrong problem-solving mindset, curiosity, and the ability to move fast while keeping systems clean and reliable"
+    },
+    "url_hash": "19ef62ea0315a70655f0563e2bab6ae0"
+  },
+  {
+    "title": "Product Designer",
+    "department": "Product Management",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "experience_level": "Mid-Level",
+    "workplace_type": "Hybrid",
+    "uid": "F2.D59",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/product-designer/F2.D59",
+    "company_name": "Dream",
+    "email": "dreamgroup.F2.D59@comeetapply.com",
+    "last_updated": "2025-10-11T07:54:28Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/F2.D59/product-designer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies.  \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe’re looking for an individual who is passionate about crafting intuitive, conversational, and intelligent user experiences. You’ll be at the forefront of shaping how users interact with AI balancing the precision of technology with the nuance of human-centered design. \nIf your team knows you as the designer who follows best practices but isn’t afraid to break conventions and invent smarter, more intuitive experiences—this role is for you.",
+      "responsibilities": "Design intuitive, user-centered solutions in a data-rich environment\nDrive the evolution of our design language to support intelligent systems, including suggestion flows, and explainable AI patterns\nTranslate complex workflows into accessible product experiences \nCollaborate closely with product managers, engineers, analysts, cyber researchers and fellow designers \nAdvocate for user trust and transparency in AI design, especially around decision-making, nudges, and personalization\nPresent your work across disciplines and senior stakeholders with clarity, storytelling, and rationale\nTake ownership from concept through execution to post-launch iteration\nFacilitate design reviews, usability tests, and continuous iteration \nContribute to the Design System and design culture",
+      "skills": "5+ years of experience designing digital products end to end \nStrong portfolio showcasing UX thinking and refined UI execution \nProficiency in \nFigma\n and a solid grasp of design best practices\nExperience working with \ndesign systems\n and component libraries\nStrong communication and collaboration skills \nA proactive mindset and comfort with fast-paced, iterative work environments\nA fascination with how people interact with technology-especially emerging modalities like AI, predictive systems and complex data\nStrong storytelling and communication skills-you can break down complex AI functionality into user-first, value-driven narratives\nBA/BS in Design, Visual Communication, or a related field\nBonus if you’ve worked on cyber security products \n \n \n*If your experience is close but doesn’t fulfill all requirements, please apply. Dream is on a mission to build a special company. To achieve our goal, we are focused on hiring Dreamers with different backgrounds, perspectives, and experiences."
+    },
+    "url_hash": "d1d666d14829da823620a467e89c056c"
+  },
+  {
+    "title": "Security Researcher",
+    "department": "Research",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "37.640",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/security-researcher/37.640",
+    "company_name": "Dream",
+    "email": "dreamgroup.37.640@comeetapply.com",
+    "last_updated": "2025-10-24T10:44:50Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/37.640/security-researcher/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are looking for a researcher to help us harness the power of Dream’s trillions of security signals to rapidly diagnose and alert the latest attacker behaviors, drive critical context-rich signals, construct new tools and automations to support customers, identify threats, and detect advanced attacker techniques.",
+      "responsibilities": "Analyze various network devices, configurations and security products\nImplement methods and algorithms to discover network topology, relationships between devices and potential lateral movement paths\nConduct network security assessments to identify weaknesses in customers network infrastructure, and recommend mitigations to monitor and limit unauthorized access\nDevelop research tools and frameworks to perform automatic analysis of network devices and security products\nResearch and analyze network-related cybersecurity threats and trends\nWork closely with other internal engineering and AI teams to integrate new capabilities into our platform and guide cross-product architectural decisions\nAct as a security subject matter expert for multidisciplinary teams",
+      "skills": "5+ years of experience in cybersecurity landscape\nDeep understanding of networking technologies and protocols, network security principles, firewalls, network access controls and network-based attacks\nExperience in monitoring or analyzing network topologies, captures and flows\nDeep knowledge in security mechanisms, products, detection techniques\nStrong coding skills, with ability to develop end-to-end POC for new security capabilities\nExcellent communication and team collaboration skills\nFluency in English"
+    },
+    "url_hash": "97e059b1f4a97192a8546b587d729843"
+  },
+  {
+    "title": "Senior Backend Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "48.643",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-backend-engineer/48.643",
+    "company_name": "Dream",
+    "email": "dreamgroup.48.643@comeetapply.com",
+    "last_updated": "2025-10-21T10:53:41Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/48.643/senior-backend-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe are seeking an experienced Senior Backend Engineer with a passion for tackling complex challenges across a diverse range of technologies. Your role will involve a deep commitment to software design, code quality, and performance optimization. As part of our Engineering team at Dream, your mission will be to empower critical infrastructure by enabling the detection, investigation, and response to complex attacks and data breaches on their networks.\nAs a Senior Backend Engineer, you will take a lead role in developing the backend infrastructure to efficiently handle, process, and store massive volumes of data. Your expertise will play a crucial part in building a scalable, high-performance backend system that serves as the foundation for other services within the platform. Additionally, you will be responsible for translating intricate requirements into meticulous and actionable backend designs.",
+      "responsibilities": "Be a significant part of the development of backend infrastructure to efficiently handle, process, and store vast volumes of data.\nArchitect and build a scalable, high-performance backend system that supports various services within the platform.\nTranslate intricate requirements into meticulous backend design plans, maintaining a focus on software design, code quality, and performance.\nCollaborate with cross-functional teams to implement backend and data-handling techniques.\nApply your expertise to create robust backend solutions.\nLeverage your proficiency in cloud platforms such as AWS, GCP, or Azure to drive strong backend engineering practices.\nDemonstrate strong debugging skills, identifying issues such as race conditions and memory leaks within the backend system. Solve complex backend problems with an analytical mindset and contribute to a positive team dynamic.\nBring your excellent interpersonal skills to foster collaboration and maintain a positive attitude within the team.",
+      "skills": "5+ years of experience with server-side coding in Java, Python, Go, or .NET.\nExperience with microservices architecture and tools (docker, k8s, etc.).\nExperience with large-scale applications with large data volumes and intensive traffic.\nExperience with NoSQL databases.\nExperience with bootstrapping projects and building systems from scratch.\nProven ownership and leadership skills.\nAdvantages:\nExperience in the cybersecurity realm.\nExperience with Go development.\nExperience with graph databases and data modeling.\nGood knowledge of networking protocols, flows, etc.\nExperience working in a startup or small company environment."
+    },
+    "url_hash": "75f2df9c17a0a192796fd8544d98bd94"
+  },
+  {
+    "title": "Senior Backend Engineer - Data Infrastructure",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "FC.35D",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-backend-engineer---data-infrastructure/FC.35D",
+    "company_name": "Dream",
+    "email": "dreamgroup.FC.35D@comeetapply.com",
+    "last_updated": "2025-10-16T23:54:28Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/FC.35D/senior-backend-engineer-data-infrastructure/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \n \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \n \nWe’re looking for a Senior Backend Engineer to design and optimize our data infrastructure, a high-performant data warehouse capable of handling massive volumes. In this role, you’ll architect backend development of scalable data pipelines and ensure seamless data processing. Your expertise in distributed systems and performance optimization will drive innovation, transforming intricate security challenges into efficient, resilient solutions.",
+      "responsibilities": "Be a significant part of the development of backend infrastructure to efficiently handle, process, and store vast volumes of data. \nArchitect and build a scalable, high-performance backend system that supports various services within the platform. \nTranslate intricate requirements into meticulous backend design plans, maintaining a focus on software design, code quality, and performance.  \nCollaborate with cross-functional teams to implement backend and data-handling techniques. \nApply your expertise to create robust backend solutions. \nLeverage your proficiency in cloud platforms such as AWS, GCP, or Azure to drive strong backend engineering practices.  \nDebug and solve complex backend problems with an analytical mindset and contribute to a positive team dynamic.  \nBring your excellent interpersonal skills to foster collaboration and maintain a positive attitude within the team.",
+      "requirements": "5+ years of experience in server-side development using Java, Python, Go, or .NET.  \nStrong background in database technologies such as MySQL, Cassandra, Google BigQuery, Amazon Redshift, Elasticsearch, and PostgreSQL. \nExperience with data warehouse technologies like Snowflake and Databricks. \nExperience in microservices architecture and tools (Docker, Kubernetes, etc.).  \nHands-on experience with large-scale applications, handling high data volumes and intensive traffic. \nSolid understanding of message queuing, stream processing, and scalable big data storage solutions. \nExperience in building and optimizing data pipelines and analytics workflows.  \nFamiliarity with streaming technologies such as Amazon Kinesis and Apache Kafka.  \nProven ability to bootstrap projects and develop systems from the ground up.  \nStrong ownership and leadership skills, with a track record of driving initiatives forward"
+    },
+    "url_hash": "6e76e079dddb080560287e2f3d1098ff"
+  },
+  {
+    "title": "Senior Data Scientist",
+    "department": "AI",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "37.642",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-data-scientist/37.642",
+    "company_name": "Dream",
+    "email": "dreamgroup.37.642@comeetapply.com",
+    "last_updated": "2025-10-23T09:55:01Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/37.642/senior-data-scientist/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are seeking a highly skilled and experienced data scientist to join our data group and play a key role in the development of our product. The ideal candidate will have a strong background in data analytics, machine learning, and cyber security, and will be responsible for analyzing large sets of data generated by critical infrastructure systems to identify potential threats and vulnerabilities.",
+      "responsibilities": "Conduct hands-on research and development of cutting-edge models\nTake research projects from ideation to deployment and production\nWork closely with domain experts and the engineering department to improve and create new innovative solutions.\nHelp define the AI product roadmap.",
+      "skills": "5+ Years as a Data Scientist with a proven production experience\nExperience in conducting applied research\nCollaborative teammate with great communication skills\nStrong programming skills in Python\nStrong problem solving skills\nCuriosity and the passion to learn about new technologies and challenges\nAdvantageous: Familiarity with modern software engineering practices and tools\nAdvantageous: cyber security background"
+    },
+    "url_hash": "a426e007566145c6e3e431eda3dac6d4"
+  },
+  {
+    "title": "Senior DevOps Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "2E.E55",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-devops-engineer/2E.E55",
+    "company_name": "Dream",
+    "email": "dreamgroup.2E.E55@comeetapply.com",
+    "last_updated": "2025-10-22T13:39:26Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/2E.E55/senior-devops-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are looking for an experienced Senior DevOps Engineer to join our DevOps team who is passionate about software design, development and deployment. The job involves writing production-grade modern DevOps solutions that will be shipped to the cloud and on prem solutions.",
+      "responsibilities": "Build the best solutions for our production platform.  \nEverything as a code approach (IaC): Run our infrastructure with a wide range of technologies including Ansible, Terraform, and Kubernetes  \nBuild and maintain tools for automation, deployment, monitoring, and operations  \nTroubleshoot issues in our development, production, and test environments  \nExcellent communication and people skills  \nWork well in a team!",
+      "skills": "5-6 years experience with DevOps technologies.  \nExperience with design, build, development and maintenance of DevOps solutions.  \nExperience with one of the major cloud providers: AWS, GCP, Azure.  \nExperience Working cloud & on-prem environments and solutions.  \nExperienced with deployment technologies.  \nExperienced with CI\\CD technologies.  \nExperience with bootstrapping projects, introducing new technologies and building systems from scratch.  \nGood coding capabilities (python\\bash etc.)  \nTeam Player!\nAdvantages:\nPrior experience with endpoint security products (agents, sensors, collectors).\nBackground in working with AI components (training, inference, serving).\nTech Stack:\nAWS, Kubernetes, EKS, ECS, Jenkins, IaC, GitHub, Terraform, Python, Ansible, Docker + Compose, ArgoCD, MongoDB, RabbitMQ, Redis, Go, Neo4J, AI, and more."
+    },
+    "url_hash": "5cb018d47251df73e2c2eaccc96bbf8b"
+  },
+  {
+    "title": "Senior DevOps Engineer - AI Infra Group",
+    "department": "AI",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "0B.E56",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-devops-engineer---ai-infra-group/0B.E56",
+    "company_name": "Dream",
+    "email": "dreamgroup.0B.E56@comeetapply.com",
+    "last_updated": "2025-10-22T12:06:16Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/0B.E56/senior-devops-engineer-ai-infra-group/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies.  \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.  \nWe're seeking an experienced Senior DevOps Engineer to join our AI Infra Group, responsible for building robust infrastructure and CI/CD pipelines that enable internal teams to rapidly develop and deploy AI-driven products and tools. You'll be a key enabler for our development teams, providing them with streamlined workflows, reliable environments, and modern DevOps practices across hybrid cloud and on-premise infrastructure.",
+      "responsibilities": "Build and maintain CI/CD pipelines and Kubernetes clusters (cloud + on-prem).\nImplement Infrastructure as Code (Terraform, Ansible, Helm) and GitOps practices.\nAutomate deployment, monitoring, and scaling workflows.\nCollaborate with engineers to improve developer experience and system reliability.\nEnsure observability, security, and compliance across infrastructure.",
+      "skills": "5+ years of DevOps experience.\nStrong Kubernetes and CI/CD expertise (Jenkins, ArgoCD, GitHub Actions).\nSkilled in Terraform, Ansible, Helm, and scripting (Python, Bash, or Go).\nExperience with AWS or hybrid environments.\nExcellent problem-solving and collaboration skills.\nNice to Have\nExperience with GPU infrastructure or ML platforms (Ray, Kubeflow, MLflow).\nFamiliarity with observability tools (Prometheus, Grafana) and service meshes (Istio).\nTech Stack\n AWS, Kubernetes, Terraform, Ansible, Helm, Jenkins, ArgoCD, GitHub Actions, Docker, Python, Bash."
+    },
+    "url_hash": "a0d57f939e34a21ba7c42a699cb6d32b"
+  },
+  {
+    "title": "Senior Devops- Production Engineer",
+    "department": "Engineering",
+    "location": "Tel-Aviv, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "98.64D",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-devops--production-engineer/98.64D",
+    "company_name": "Dream",
+    "email": "dreamgroup.98.64D@comeetapply.com",
+    "last_updated": "2025-10-25T02:28:33Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tlv-isr/98.64D/production-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are seeking an experienced Production Engineer to join our SRE team as part of our Platform Engineering group. This role involves taking ownership of monitoring, deploying, and ensuring the reliability of production-grade modern SaaS platforms across Cloud and On-Premise environments.",
+      "responsibilities": "Lead initiatives to enhance product reliability and system readiness. \nDesign and implement sophisticated monitoring solutions to ensure high availability and performance of our production platform. \nOversee and refine the entire product reliability pipeline. \nProactively troubleshoot and resolve issues across production environments. \nChampion an \"Everything as Code\" approach using a wide range of technologies including Ansible, Terraform, Helm, Python and more. \nDevelop advanced tools for automation, deployment, monitoring, and operations. \nExhibit excellent communication and interpersonal skills to effectively collaborate within the team and across departments. \nPromoting best practices in reliability and system operations.",
+      "skills": "4+ years of experience as a DevOps or Site Reliability Engineer. \nIn-depth knowledge of microservices architectures and technologies such as Kubernetes. \nComprehensive understanding of cloud & on-prem environments and hybrid solutions. \nProficiency with one or more major cloud providers. (AWS experience is an advantage) \nAdvanced experience with CI/CD technologies including Jenkins, GitHub Actions, and ArgoCD. \nProficient coding and scripting capabilities in Python, Bash, or similar languages. \nStrong team player with proven ability to lead and inspire. \n﻿Advantages:\nPrior experience with endpoint security products (agents, sensors, collectors). \nBackground in working with AI components (training, inference, serving). \nTech Stack: AWS, Kubernetes, EKS, RKE2, ECS, SageMaker, Jenkins, GitHub, Terraform, Python, Ansible, Docker + Compose, ArgoCD, MongoDB, RabbitMQ, Redis, Go, Neo4J, AI, and more."
+    },
+    "url_hash": "ce51f8c3c89447e0ce606ff165a44c76"
+  },
+  {
+    "title": "Senior NLP Researcher",
+    "department": "AI",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "B3.05A",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-nlp-researcher/B3.05A",
+    "company_name": "Dream",
+    "email": "dreamgroup.B3.05A@comeetapply.com",
+    "last_updated": "2025-10-22T05:57:54Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/B3.05A/senior-nlp-researcher/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe are seeking a highly skilled and experienced \nSenior NLP Researcher \nto join our AI research team and drive the development of Dream's next-generation large language models (LLMs). The ideal candidate will have a strong background in NLP, deep learning, and applied research, with a passion for innovating and pushing the boundaries of generative AI technologies.",
+      "responsibilities": "Conduct cutting-edge research in natural language processing and large language models.\nDesign, train, and optimize large-scale neural network models for advanced applications.\nTransition research projects from ideation through deployment and scaling.\nCollaborate closely with cross-functional teams, including domain experts, product managers, and engineers, to deliver impactful AI solutions.\nDefine and contribute to the AI and NLP product roadmap.",
+      "requirements": "M.Sc. in Computer Science, Data Science, Artificial Intelligence, Machine Learning, or a related field.\n5+ years of experience in applied AI research.\nStrong programming skills, particularly in Python and ML frameworks (e.g., TensorFlow, PyTorch).\nSolid understanding of NLP.\nExperience with modern Large Language Models (LLM) and generative models.\nProven expertise in designing, implementing, and evaluating deep learning models in a production environment.\nPreferred Qualifications\nExperience with training Large Generative Language Models (LLM).\nKnowledge of distributed computing and infrastructure for training large models.\nInterest in exploring novel architectures for LLMs."
+    },
+    "url_hash": "3006f2379ff200a1c2c192ed70a34445"
+  },
+  {
+    "title": "Senior Product Manager - Cybersecurity",
+    "department": "Product Management",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "experience_level": "Senior",
+    "workplace_type": "Hybrid",
+    "uid": "BF.75A",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-product-manager---cybersecurity/BF.75A",
+    "company_name": "Dream",
+    "email": "dreamgroup.BF.75A@comeetapply.com",
+    "last_updated": "2025-10-20T11:31:31Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/BF.75A/senior-product-manager-cybersecurity/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"unknowns,\" our AI transforms data into clear threat narratives and actionable defense strategies.   \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are looking for a seasoned Product Manager to join Dream’s Product group and help us shape the future of Cybersecurity for nations.\nThis is a high-ownership role at the intersection of cybersecurity, AI, and product strategy. You will be responsible for defining our cyber artificial agents and applications, leading early-stage discovery, and shaping prototypes into clear product opportunities that can be delivered by the company.\nAs a PM, you will translate governmental customer problems, threat research, and industry insights into actionable roadmaps that guide Dream’s platform toward solving the most pressing security challenges. You will impact on nation-wide resilience of countreis, own the lifecycle from problem framing to validated prototype, ensuring continuity through to productionization.",
+      "responsibilities": "Lead end-to-end product discovery for cyber use cases of governmental agencies, from market analysis and customer needs to threat landscape research.\n Define and own the problem statements and success criteria for AI agents and applications in the Detection, Risk, Response, and CTI pillars.\n Partner with Cyber & AI research groups to drive innovation, design and validate prototypes that prove feasibility and demonstrate customer value, and transition validated concepts into scalable reasoning and model capabilities.\n Work with R&D application teams to ensure customer-grade delivery of features, maintaining fidelity to the original product vision.\n Act as the voice of the customer and the threat landscape, ensuring Dream solves relevant, high-impact problems.\n Prioritize initiatives based on threat relevance, business value, and strategic alignment.\n Communicate product direction and progress clearly across internal and external stakeholders.\nContribute thought leadership by transforming research outcomes into product narratives and customer-facing messaging.",
+      "skills": "5+ years of product management experience, with demonstrated ownership of the full product lifecycle.\n Strong background in cybersecurity, including familiarity with attacker TTPs, detection, and risk management.\n Proven experience in technical product definition: writing specs, problem statements, and validation frameworks.\n Ability to collaborate with cyber researchers, AI scientists, and engineers to turn concepts into prototypes and production features.\n Hands-on understanding of enterprise IT environments (e.g., identity, network, cloud, logs, configs).\n Strong communication skills in English, with the ability to engage customers, executives, and technical teams.\n Analytical and strategic thinker, with proven ability to manage ambiguity and extract clarity.\n Assertive, proactive, and comfortable challenging assumptions with data-driven insights.\nExperience in both inbound and outbound product responsibilities (roadmapping, customer engagement, positioning)."
+    },
+    "url_hash": "38738ce9458b0e5d7685b8307949e707"
+  },
+  {
+    "title": "Senior QA Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "36.A58",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-qa-engineer/36.A58",
+    "company_name": "Dream",
+    "email": "dreamgroup.36.A58@comeetapply.com",
+    "last_updated": "2025-10-18T08:42:50Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/36.A58/senior-qa-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe’re looking for a \nSenior\n \nQA Engineer\n with a keen eye for detail and a passion for quality to join our QA Automation team and champion product quality through thoughtful testing and a strong sense of ownership. In this role, you’ll work closely with developers, product managers, and automation engineers to plan, execute, and continuously evolve our testing strategy—ensuring every feature we ship meets the highest standards.",
+      "responsibilities": "Own the end-to-end quality of features from planning through release.\nDesign and execute comprehensive test plans covering exploratory, functional, regression, and integration testing.\nAdvocate for quality early by actively participating in product and feature design discussions.\nIdentify edge cases and gaps by collaborating with developers and automation engineers.\nSupport automation efforts by validating coverage and assisting with test integration.\nReport bugs clearly and constructively, and help triage issues across teams.\nContribute to QA documentation and share testing knowledge with the broader team.",
+      "skills": "5+ years of experience in QA roles\nStrong grasp of QA methodologies and best practices\nExperience testing web applications, APIs, and client-server systems\nFamiliarity with network protocols and client-server communication (e.g., HTTP)\nAbility to craft clear, detailed test cases and bug reports\nHands-on with test management tools (e.g., TestRail)\nBasic shell scripting skills; comfortable reading logs, inspecting pods, and managing jobs via Jenkins\nThrive in fast-paced, agile environments\nStrong communicator and highly collaborative team player\nNice to Have\n \nExperience with scripting or test automation (e.g., Python, Selenium, Playwright)\nFamiliarity with tools like Postman, Swagger, or browser dev tools\nUnderstanding of CI/CD workflows and QA’s role in release processes\nExposure to cloud platforms (AWS, GCP) and containerized environments (Docker, Kubernetes)"
+    },
+    "url_hash": "0ce45149c5345def8201fb830b267525"
+  },
+  {
+    "title": "Senior Windows Kernel Engineer",
+    "department": "Engineering",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "48.645",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/senior-windows-kernel-engineer/48.645",
+    "company_name": "Dream",
+    "email": "dreamgroup.48.645@comeetapply.com",
+    "last_updated": "2025-10-19T20:57:40Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/48.645/senior-windows-kernel-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nWe are looking for a senior Windows developer who is passionate about software design, code quality, and performance. The job involves writing production-grade and highly performant code that will be shipped to thousands of endpoints. The role includes developing for the Windows kernel to collect the necessary data as well as writing user-mode code for integrating the kernel driver into our sensor’s architecture.",
+      "responsibilities": "Write production-grade C/C++ code to create robust and high-performance software drivers and applications for Windows.\nInvestigate possibly undocumented system behavior to enable product features or to resolve software issues.\nOptimize code for maximum efficiency and resource utilization, ensuring the smooth operation of our solutions.\nCollaborate closely with operating system internals to gather essential data for analyzing abnormal behavior on endpoints.\nParticipate in code reviews with an emphasis on design and code quality, ensuring the team adheres to best practices.\nWork effectively within a team, contributing to a collaborative and innovative development environment.\nApply your problem-solving abilities to address complex technical challenges in the cybersecurity domains.",
+      "skills": "5+ years of experience in Windows drivers development.\nFluent in C.\nDeep understanding of operating system concepts and Windows internals.\nExperience with file-system minifilter or Windows Filtering Platform drivers - an advantage.\nFamiliarity with C++ (11 or later).\nProven experience in multithreaded development and synchronization.\nExcellent debugging skills, including the ability to identify and rectify race conditions and memory leaks.\nCapable of conducting code reviews with a focus on design and quality, contributing to a high-standard codebase.\nUnderstanding of low-level assembly to delve into software internals.\nWorking with research such as IDA and WinDbg to analyze and troubleshoot software issues.\nProblem-solving abilities.\nAnalytical thinking.\nAbility to work well in a team."
+    },
+    "url_hash": "f993d5294dc1516b24426fb30f2abf3a"
+  },
+  {
+    "title": "Talent Acquisition Partner",
+    "department": "HR",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "experience_level": "Senior",
+    "workplace_type": "Hybrid",
+    "uid": "AC.75A",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/talent-acquisition-partner/AC.75A",
+    "company_name": "Dream",
+    "email": "dreamgroup.AC.75A@comeetapply.com",
+    "last_updated": "2025-09-30T08:35:46Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/AC.75A/talent-acquisition-partner/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies.\nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario.\nThis is a strategic, hands-on role that's all about finding amazing people, and giving them an unforgettable candidate experience. You'll lead hiring across Dream and own full-cycle recruitment, helping us scale with vision and intention.  \nWe are looking for a strategic talent partner who understands business needs, provides market insights, and influence decisions with data-driven recommendations. \nYou'll be a key partner in shaping Dream’s culture, by attracting and hiring top talent in an innovative, mission-driven environment.",
+      "requirements": "The ideal dreamer has:  \n4+ years of hands-on & strategic tech recruitment experience, preferably in the AI or Cybersecurity domain \nExperience in conducting in-depth, behavioral interviews that uncover both technical competencies and cultural alignment \nIs proactive, curious, has great sense of urgency and drive to make matches between people and opportunities  \nThrives in a fast-paced, high-growth environment and loves to get things done  \nIs people-oriented with excellent communication and interpersonal skills"
+    },
+    "url_hash": "92cf0ab9935e54a4f22740c125cb435b"
+  },
+  {
+    "title": "Technical Presale Engineer",
+    "department": "Business",
+    "location": "Tel Aviv-Jaffa, IL, (Remote)",
+    "employment_type": "Full-time",
+    "workplace_type": "Hybrid",
+    "uid": "59.F4F",
+    "url": "https://www.comeet.com/jobs/dreamgroup/99.002/technical-presale-engineer/59.F4F",
+    "company_name": "Dream",
+    "email": "dreamgroup.59.F4F@comeetapply.com",
+    "last_updated": "2025-10-19T10:25:09Z",
+    "original_website_job_url": "https://dreamgroup.com/careers-2/co/tel-aviv/59.F4F/technical-presale-engineer/all/",
+    "description": {
+      "description": "Dream is a pioneering AI cybersecurity company delivering revolutionary defense through artificial intelligence. Our proprietary AI platform creates a unified security system safeguarding assets against existing and emerging generative cyber threats. Dream's advanced AI automates discovery, calculates risks, performs real-time threat detection, and plans an automated response. With a core focus on the \"\"unknowns,\"\" our AI transforms data into clear threat narratives and actionable defense strategies. \nDream's AI cybersecurity platform represents a paradigm shift in cyber defense, employing a novel, multi-layered approach across all organizational networks in real-time. At the core of our solution is Dream's proprietary Cyber Language Model, a groundbreaking innovation that provides real-time, contextualized intelligence for comprehensive, actionable insights into any cyber-related query or threat scenario. \nWe are looking for a Technical Presale Engineer with a strong technical orientation in cybersecurity and networking, 2–4 years of customer-facing experience (e.g., presales, solution architects, technical account managers, training, or consulting), and a willingness to travel. The ideal candidate should be presentable, energetic, and able to build strong client relationships. You will help execute technical presales processes and contribute as a trusted client advisor, ensuring successful solution delivery and long-term customer satisfaction.",
+      "responsibilities": "Run Engaging Demos: \nConduct technical and non-technical demonstrations of cybersecurity solutions tailored to diverse stakeholder audiences, including CISOs, CIOs, and IT/Security leaders.\nOwn and Conduct POC Processes: \nLead the Proof of Concept (POC) process, from initial setup to final evaluation, ensuring client success and satisfaction.\nIndustry & Competitive Awareness: \nStay informed about industry trends, emerging cybersecurity threats, and competitor solutions to provide informed recommendations and maintain a competitive edge.\nTechnical Advisory Role: \nServe as a trusted technical advisor, guiding key decision-makers (CISOs, CIOs, IT/Security leaders) on how to address their cybersecurity challenges and achieve their strategic goals.\nCollaboration with Product and Engineering Teams: \nPartner with internal teams to design and implement complex solution architectures, ensuring alignment with client needs and technical feasibility.",
+      "requirements": "Must-Have Qualifications:\nCybersecurity Technical Orientation:\nStrong foundational knowledge of cybersecurity concepts and networking fundamentals, including TCP/IP, DNS, firewalls, VPNs, and threat landscapes.\nAbility to quickly grasp complex technical systems and articulate their value to clients.\nCustomer-Facing Experience:\n2–4 years in client-facing roles, such as presales, training, consulting, or customer success.\nProven ability to communicate technical concepts to both technical and non-technical stakeholders.\nWillingness to Travel:\nAbility and willingness to travel  frequently domestically and internationally to meet client and business needs.\nLanguage Skills:\nFluency in English is essential. Additional fluency in languages like French, German, or Spanish is a significant advantage.\nNice-to-Have Qualifications:\nExperience in a SOC (Security Operations Center):\nHands-on experience or knowledge of SOC workflows, incident response, and threat management.\nHands-on Experience with Security Tools:\nFamiliarity with tools like \nSIEM (e.g., Splunk, QRadar)\n, endpoint protection platforms, vulnerability assessment tools, or similar technologies.\n \nMilitary Technology Unit Background:\nService in units such as \n8200\n or \n81\n, with exposure to cybersecurity or networking technologies.\nCertifications:\nRelevant certifications such as \nCISSP\n, \nCCNA (Security)\n, \nCompTIA Security+\n, or \nGIAC\n certifications.\nKnowledge of Advanced Cybersecurity Technologies:\nUnderstanding or experience with emerging trends like AI-driven security solutions, RAG (Retrieval-Augmented Generation), or advanced threat detection.\n \nCloud and Operational Technology (OT) Knowledge:\nFamiliarity with cloud security frameworks (e.g., AWS, Azure, GCP) and securing OT environments, such as ICS/SCADA systems."
+    },
+    "url_hash": "9c22de0473ff9ef81849e89fd0c09bb8"
+  }
+]
