@@ -15,18 +15,24 @@ from typing import Optional
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.utils import load_config, setup_logging
+from scripts.utils import load_config, TextEmbedder
 from scripts.db_utils import JobsDB
-from scripts.embed_cv import TextEmbedder
+
+logger = logging.getLogger(__name__)
 
 
+def embed_jobs(jobs_db:JobsDB, embedder:TextEmbedder, prompt_version:str) -> tuple[int, int]:
+    pass
+
+
+
+## TODO Need to decide what will be the batch size at it can be cheaper with open ai . and the embedder should be taken from config.
 def process_jobs_with_embeddings(
     jobs_db: JobsDB,
     embedder: TextEmbedder,
     batch_size: int = 10,
     delay_seconds: float = 1.0,
     max_jobs: Optional[int] = None,
-    logger: Optional[logging.Logger] = None
 ) -> tuple[int, int]:
     """
     Process jobs without embeddings and generate them.
@@ -42,7 +48,6 @@ def process_jobs_with_embeddings(
     Returns:
         Tuple of (processed_count, error_count)
     """
-    logger = logger or setup_logging()
     
     # Fetch jobs without embeddings
     logger.info(f"Fetching jobs without embeddings (limit: {max_jobs or 'all'})...")
@@ -109,7 +114,6 @@ def main():
      
     # Load configuration
     try:
-        logger = setup_logging()
         config = load_config()
         cv_config = config.get('cv_embedding', {})
         job_config = config.get('job_embedding', {})

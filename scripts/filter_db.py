@@ -9,14 +9,14 @@ import sys
 import os
 import json
 from typing import List, Dict, Any, Optional
+import logging 
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scripts.utils import setup_logging
 from scripts.db_utils import get_db_connection, JOBS_DB
 
 # Setup logger
-logger = setup_logging()
+logger = logging.getLogger(__name__)
 
 
 class DBFilter:
@@ -36,19 +36,11 @@ class DBFilter:
         """
         self.db_path = db_path
         self.table_name = table_name
-        self.logger = setup_logging()
     
     def get_unique_values(self, column: str) -> List[str]:
         """
         Get all unique non-null values from a specific column.
         Useful for validating filter values.
-        
-        Args:
-            column: Column name to query
-            
-        Returns:
-            List of unique values from the column
-            
         Example:
             >>> filter = DBFilter(JOBS_DB)
             >>> workplace_types = filter.get_unique_values('workplace_type')
@@ -68,12 +60,6 @@ class DBFilter:
     def _validate_filters(self, filters: Dict[str, List[str]]) -> bool:
         """
         Validate that filter columns exist in the table.
-        
-        Args:
-            filters: Dictionary of filter criteria
-            
-        Returns:
-            True if all filters are valid, False otherwise
         """
         try:
             with get_db_connection(self.db_path) as conn:
@@ -144,11 +130,9 @@ class DBFilter:
     def filter_records(self, filters: Dict[str, List[str]]) -> List[Dict[str, Any]]:
         """
         Filter records from the database based on specified criteria.
-        
         Args:
             filters: Dictionary of filter criteria where keys are column names
                     and values are lists of acceptable values
-        
         Returns:
             List of matching records as dictionaries
             
