@@ -7,14 +7,73 @@ Common helper functions used across scripts
 import yaml
 import json
 import logging
-import requests
 import time
 import sys
 from typing import Dict, List, Any, Optional
 from pathlib import Path
-
+from openai import OpenAI
+import os
 
 _LOGGER: Optional[logging.Logger] = None
+
+
+logger = logging.getLogger(__name__)
+
+
+
+class TextEmbedder:
+    """Shared base class for generating text embeddings"""
+    
+    def __init__(self):
+        self.config = load_config()
+        self.model_name = self.config.get('openai_model_name')
+        self.client = OpenAI(api_key=self.config.get('openai_api_key'))
+    
+   
+    def embed_text(self, text: str) -> dict:
+        """
+        Generate embedding for the given text.
+        """
+        if not text or not text.strip():
+            raise ValueError("Cannot generate embeddings for empty text")
+            
+        ##the model is "text-embedding-3-small"
+        try:
+            # Generate embedding (returns 1D numpy array)
+            embedding = self.client.embeddings.create(input=text, model=self.model_name).data[0].embedding
+            
+            self.logger.debug(f"Embedding generated successfully. Dimension: {len(embedding)}")
+            
+            return {
+            'embedding': embedding,
+            'model_name': self.embedder.model_name,
+        }
+            
+        except Exception as e:
+            raise RuntimeError(f"Error generating embedding: {str(e)}")
+
+    def save_embedding(self, embedding_data: Dict, output_path: str):
+        """
+        Save embedding data to a pickle file.
+        output_path: Path where to save the pickle file
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Save to pickle file
+            with open(output_path, 'wb') as f:
+                pickle.dump(embedding_data, f)
+            
+            self.logger.info(f"Embedding saved successfully to: {output_path}")
+            
+            # Print summary
+            file_size = os.path.getsize(output_path) / 1024  # KB
+            self.logger.info(f"File size: {file_size:.2f} KB")
+            
+        except Exception as e:
+            raise RuntimeError(f"Error saving embedding: {str(e)}")
+
 
 
 class _MaxLevelFilter(logging.Filter):
@@ -55,52 +114,26 @@ def load_config() -> Dict[str, Any]:
     return config
 
 
-def setup_logging() -> logging.Logger:
-    """Configure and return the shared application logger."""
-    global _LOGGER
-
-    if _LOGGER is not None:
-        return _LOGGER
-
-    log_config: Dict[str, Any] = {}
-
+def setup_logging():
+    """Configure root logger - call once at service startup."""
+    log_config = {}
     try:
         config = load_config()
         log_config = config.get('logging', {})
     except Exception:
-        # Fall back to defaults if configuration cannot be loaded
-        log_config = {}
-
-    logger = logging.getLogger('jobhunter')
-    logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
-    logger.propagate = False
-
-    if not logger.handlers:
+        pass
+    
+    root_logger = logging.getLogger()  # ROOT logger
+    root_logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
+    
+    ## !TODO,I defiently need to change looging structure into json.
+    if not root_logger.handlers:
         formatter = logging.Formatter(
             log_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         )
-
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setLevel(logging.DEBUG)
-        stdout_handler.addFilter(_MaxLevelFilter(logging.WARNING - 1))
-        stdout_handler.setFormatter(formatter)
-
-        stderr_handler = logging.StreamHandler(sys.stderr)
-        stderr_handler.setLevel(logging.WARNING)
-        stderr_handler.setFormatter(formatter)
-
-        logger.addHandler(stdout_handler)
-        logger.addHandler(stderr_handler)
-
-        if log_config.get('file'):
-            logger.warning(
-                "File logging is no longer enabled by default; stream handlers are used instead."
-            )
-
-    _LOGGER = logger
-    return _LOGGER
-
-
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
 
 
 def deduplicate_companies(companies: List[Dict]) -> List[Dict]:

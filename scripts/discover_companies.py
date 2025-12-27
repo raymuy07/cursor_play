@@ -11,10 +11,13 @@ from typing import List, Dict
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scripts.utils import load_config, setup_logging
+from scripts.utils import load_config
 from scripts.db_utils import SearchQueriesDB, CompaniesDB, initialize_database, SEARCH_QUERIES_DB, COMPANIES_DB
 from scripts.db_schema import get_search_queries_schema, get_companies_schema
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 def discover_companies() -> List[Dict]:
     """
@@ -22,7 +25,6 @@ def discover_companies() -> List[Dict]:
     Returns list of all companies currently in the database
     """
     config = load_config()
-    logger = setup_logging()
     
     # Initialize both databases if they don't exist
     try:
@@ -84,7 +86,7 @@ def discover_companies() -> List[Dict]:
     return companies_db.get_all_companies()
 
 
-def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueriesDB = None, companies_db: CompaniesDB = None) -> int:
+def search_domain_jobs(domain: str, config: Dict, search_db: SearchQueriesDB = None, companies_db: CompaniesDB = None) -> int:
     """
     Search for job pages on a specific domain using Serper API
     Returns the count of new companies added to the database
@@ -173,7 +175,7 @@ def search_domain_jobs(domain: str, config: Dict, logger, search_db: SearchQueri
     return new_companies_count
 
 
-def process_search_results(organic_results: List[Dict], domain: str, logger, companies_db: CompaniesDB = None) -> int:
+def process_search_results(organic_results: List[Dict], domain: str, companies_db: CompaniesDB = None) -> int:
     """
     Process search results, extract company information, and insert into database
     Returns the count of new companies added
@@ -284,5 +286,6 @@ def clean_job_page_url(url: str) -> str:
 
 
 if __name__ == "__main__":
-    print("Discovering companies...")
+    
+    logger.info(f"Discovering Companies")
     discover_companies()

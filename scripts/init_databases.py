@@ -6,7 +6,10 @@ Creates and initializes both search_queries.db and companies_pages.db
 
 import os
 import sys
-from utils import setup_logging
+import logging 
+
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +28,6 @@ from scripts.db_utils import (
 
 def init_search_queries_db():
     """Initialize search_queries.db"""
-    logger = setup_logging()
     
     logger.info(f"Initializing search_queries.db at {SEARCH_QUERIES_DB}")
     
@@ -47,7 +49,6 @@ def init_search_queries_db():
 
 def init_companies_db():
     """Initialize companies.db"""
-    logger = setup_logging()
     
     logger.info(f"Initializing companies.db at {COMPANIES_DB}")
     
