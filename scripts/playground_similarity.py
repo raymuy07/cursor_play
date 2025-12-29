@@ -11,12 +11,16 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from db_utils import JobsDB
 from typing import List, Dict, Optional
+import logging
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.utils import TextEmbedder
-from scripts.embed_cv import CVReader
-from scripts.utils import load_config, setup_logging
+from common.utils import TextEmbedder
+from scripts.embed_cv import CVProcessor
+from common.utils import load_config, setup_logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
@@ -26,29 +30,9 @@ def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     return float(np.dot(vec_a, vec_b) / denom)
 
 
-def read_file_text(path: Path, logger) -> str:
-    suffix = path.suffix.lower()
-    if suffix in {".pdf", ".docx"}:
-        logger.info("Extracting text from %s", path)
-        reader = CVReader(str(path), logger=logger)
-        return reader.extract_text()
-    logger.info("Reading text file %s", path)
-    return path.read_text(encoding="utf-8")
 
-
-def sample_batch_of_jobs(jobs_db: JobsDB, sample_cv_path: str, logger=None) -> List[Dict]:
-    if not logger:
-        logger=setup_logging
-    config = load_config()
-
-    output_text_location = Path(r"C:\Users\Guy\Desktop\taker_texts_expiremtn")
-    cv_path = Path(sample_cv_path)
-    cv_text = read_file_text(cv_path, logger)
-
-
+def sample_batch_of_jobs(jobs_db: JobsDB, text_embedder: TextEmbedder, cv_embedding: dict) -> List[Dict]:
     jobs_score_list = []
-    client = OpenAI(api_key=config.get('openai_api_key'))
-    embedding_guy_cv = client.embeddings.create(input=cv_text, model="text-embedding-3-small").data[0].embedding
 
     jobs = jobs_db.get_jobs_without_embeddings(limit=50)
     sample_size = min(50, len(jobs))  # Handle case where < 50 jobs exist
@@ -63,12 +47,9 @@ def sample_batch_of_jobs(jobs_db: JobsDB, sample_cv_path: str, logger=None) -> L
         company = job.get('company_name', 'Unknown')
 
 
-        job_embedding = client.embeddings.create(
-                input=job_description,
-                model="text-embedding-3-small"
-            ).data[0].embedding
+        job_embedding = text_embedder.embed(job_description)
 
-        similarity_score = cosine_similarity(embedding_guy_cv, job_embedding)
+        similarity_score = cosine_similarity(cv_embedding['embedding'], job_embedding['embedding'])
 
         jobs_score_list.append({
                 'id': job_id,
@@ -81,11 +62,11 @@ def sample_batch_of_jobs(jobs_db: JobsDB, sample_cv_path: str, logger=None) -> L
     jobs_score_list.sort(key=lambda x: x['similarity_score'], reverse=True)
 
     # Save results to output file
-    output_file = output_text_location / "job_rankings.txt"
+    output_file = Path(r"C:\Users\Guy\Desktop\taker_texts_expiremtn") / "job_rankings.txt"
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(f"CV: {cv_path.name}\n")
+        f.write(f"CV: {cv_embedding['source_file']}\n")
         f.write(f"Jobs analyzed: {len(jobs_score_list)}\n")
         f.write("=" * 60 + "\n\n")
 
@@ -102,7 +83,6 @@ def sample_batch_of_jobs(jobs_db: JobsDB, sample_cv_path: str, logger=None) -> L
 
 class EmbeddingPlaygroundApp:
     def __init__(self) -> None:
-        self.logger = setup_logging()
         self.config = self._load_config()
         self.embedder: Optional[TextEmbedder] = None
 
@@ -121,7 +101,7 @@ class EmbeddingPlaygroundApp:
         try:
             return load_config()
         except Exception as exc:
-            self.logger.warning("Unable to load config.yaml: %s", exc)
+            logger.warning("Unable to load config.yaml: %s", exc)
             return {}
 
     def _resolve_model(self) -> str:
@@ -222,9 +202,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    logger = setup_logging()  # Create logger instance
-    sample_cv_path = r"C:\Users\Guy\Desktop\taker_texts_expiremtn\Ofek Bs resume after model proccessing ver1.txt"
-    sample_batch_of_jobs(JobsDB(), sample_cv_path, logger)  # JobsDB() not JobsDB
 
-    # main()
 
+    sample_cv_path = r"C:\Users\Guy\Desktop\taker_texts_expiremtn\CV-Ofek_Ben_Shlush.pdf"
+    cv_reader = CVProcessor()
+    text_embedder = TextEmbedder()
+    cv_embedding = cv_reader.process(sample_cv_path)
+    sample_batch_of_jobs(JobsDB(), text_embedder, cv_embedding)  # JobsDB() not JobsDB
