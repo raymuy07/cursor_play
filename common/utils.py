@@ -7,14 +7,70 @@ Common helper functions used across scripts
 import yaml
 import json
 import logging
-import requests
 import time
 import sys
 from typing import Dict, List, Any, Optional
 from pathlib import Path
-
+from openai import OpenAI
+import os
 
 _LOGGER: Optional[logging.Logger] = None
+
+
+logger = logging.getLogger(__name__)
+
+class TextEmbedder:
+    """Shared base class for generating text embeddings"""
+
+    def __init__(self):
+        self.config = load_config()
+        self.model_name = self.config.get('embeddings', {}).get('model_name')
+        self.client = OpenAI(api_key=self.config.get('openai_api_key'))
+
+
+    def embed(self, text: str) -> dict:
+        """
+        Generate embedding for the given text.
+        """
+        if not text or not text.strip():
+            raise ValueError("Cannot generate embeddings for empty text")
+
+        try:
+            # Generate embedding (returns 1D numpy array)
+            embedding = self.client.embeddings.create(input=text, model=self.model_name).data[0].embedding
+
+            logger.debug(f"Embedding generated successfully. Dimension: {len(embedding)}")
+
+            return {
+            'embedding': embedding,
+            'model_name': self.model_name,
+        }
+
+        except Exception as e:
+            raise RuntimeError(f"Error generating embedding: {str(e)}")
+
+    def save_embedding(self, embedding_data: Dict, output_path: str):
+        """
+        Save embedding data to a pickle file.
+        output_path: Path where to save the pickle file
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            # Save to pickle file
+            with open(output_path, 'wb') as f:
+                pickle.dump(embedding_data, f)
+
+            logger.info(f"Embedding saved successfully to: {output_path}")
+
+            # Print summary
+            file_size = os.path.getsize(output_path) / 1024  # KB
+            logger.info(f"File size: {file_size:.2f} KB")
+
+        except Exception as e:
+            raise RuntimeError(f"Error saving embedding: {str(e)}")
+
 
 
 class _MaxLevelFilter(logging.Filter):
@@ -33,15 +89,15 @@ def load_config() -> Dict[str, Any]:
     config_path = Path('config.yaml')
     if not config_path.exists():
         raise FileNotFoundError("config.yaml not found")
-    
+
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Load environment variables for sensitive data
     import os
     from dotenv import load_dotenv
     load_dotenv()
-    
+
     # Replace placeholders with environment variables
     if 'openai_api_key' in config:
         config['openai_api_key'] = os.getenv('OPENAI_API_KEY', config['openai_api_key'])
@@ -51,56 +107,30 @@ def load_config() -> Dict[str, Any]:
         config['telegram_chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['telegram_chat_id'])
     if 'serper_api_key' in config:
         config['serper_api_key'] = os.getenv('SERPER_API_KEY', config['serper_api_key'])
-    
+
     return config
 
 
-def setup_logging() -> logging.Logger:
-    """Configure and return the shared application logger."""
-    global _LOGGER
-
-    if _LOGGER is not None:
-        return _LOGGER
-
-    log_config: Dict[str, Any] = {}
-
+def setup_logging():
+    """Configure root logger - call once at service startup."""
+    log_config = {}
     try:
         config = load_config()
         log_config = config.get('logging', {})
     except Exception:
-        # Fall back to defaults if configuration cannot be loaded
-        log_config = {}
+        pass
 
-    logger = logging.getLogger('jobhunter')
-    logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
-    logger.propagate = False
+    root_logger = logging.getLogger()  # ROOT logger
+    root_logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
 
-    if not logger.handlers:
+    ## !TODO,I defiently need to change looging structure into json.
+    if not root_logger.handlers:
         formatter = logging.Formatter(
             log_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         )
-
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        stdout_handler.setLevel(logging.DEBUG)
-        stdout_handler.addFilter(_MaxLevelFilter(logging.WARNING - 1))
-        stdout_handler.setFormatter(formatter)
-
-        stderr_handler = logging.StreamHandler(sys.stderr)
-        stderr_handler.setLevel(logging.WARNING)
-        stderr_handler.setFormatter(formatter)
-
-        logger.addHandler(stdout_handler)
-        logger.addHandler(stderr_handler)
-
-        if log_config.get('file'):
-            logger.warning(
-                "File logging is no longer enabled by default; stream handlers are used instead."
-            )
-
-    _LOGGER = logger
-    return _LOGGER
-
-
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
 
 
 def deduplicate_companies(companies: List[Dict]) -> List[Dict]:
@@ -109,13 +139,13 @@ def deduplicate_companies(companies: List[Dict]) -> List[Dict]:
     """
     seen_urls = set()
     unique_companies = []
-    
+
     for company in companies:
         job_url = company.get('job_page_url')
         if job_url and job_url not in seen_urls:
             seen_urls.add(job_url)
             unique_companies.append(company)
-    
+
     return unique_companies
 
 
@@ -125,14 +155,14 @@ def deduplicate_jobs(jobs: List[Dict]) -> List[Dict]:
     """
     seen_jobs = set()
     unique_jobs = []
-    
+
     for job in jobs:
         # Create a unique identifier
         job_id = f"{job.get('title', '')}_{job.get('company', '')}"
         if job_id not in seen_jobs:
             seen_jobs.add(job_id)
             unique_jobs.append(job)
-    
+
     return unique_jobs
 
 
@@ -150,7 +180,7 @@ def save_json(data: List[Dict], filepath: str):
     Save data to JSON file with proper formatting
     """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -161,6 +191,6 @@ def load_json(filepath: str) -> List[Dict]:
     """
     if not Path(filepath).exists():
         return []
-    
+
     with open(filepath, 'r', encoding='utf-8') as f:
         return json.load(f)

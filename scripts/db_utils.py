@@ -10,10 +10,10 @@ import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from contextlib import contextmanager
-from scripts.utils import setup_logging
+import logging
 
 # Setup logger for this module
-logger = setup_logging()
+logger = logging.getLogger(__name__)
 
 
 # Database paths
