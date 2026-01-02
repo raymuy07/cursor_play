@@ -5,15 +5,22 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
-
+import random
 import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from db_utils import JobsDB
+from typing import List, Dict, Optional
+import logging
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.embed_cv import TextEmbedder, CVReader
-from scripts.utils import load_config, setup_logging
+from common.utils import TextEmbedder
+from scripts.embed_cv import CVProcessor
+from common.utils import load_config, setup_logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
@@ -23,19 +30,59 @@ def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     return float(np.dot(vec_a, vec_b) / denom)
 
 
-def read_file_text(path: Path, logger) -> str:
-    suffix = path.suffix.lower()
-    if suffix in {".pdf", ".docx"}:
-        logger.info("Extracting text from %s", path)
-        reader = CVReader(str(path), logger=logger)
-        return reader.extract_text()
-    logger.info("Reading text file %s", path)
-    return path.read_text(encoding="utf-8")
+
+def sample_batch_of_jobs(jobs_db: JobsDB, text_embedder: TextEmbedder, cv_embedding: dict) -> List[Dict]:
+    jobs_score_list = []
+
+    jobs = jobs_db.get_jobs_without_embeddings(limit=50)
+    sample_size = min(50, len(jobs))  # Handle case where < 50 jobs exist
+    random_jobs = random.sample(jobs, sample_size)
+
+
+    for i, job in enumerate(random_jobs):
+        # Jobs are dicts, not objects - use dict access
+        job_title = job.get('title', 'Unknown')
+        job_description = job.get('description', '')
+        job_id = job.get('id')
+        company = job.get('company_name', 'Unknown')
+
+
+        job_embedding = text_embedder.embed(job_description)
+
+        similarity_score = cosine_similarity(cv_embedding['embedding'], job_embedding['embedding'])
+
+        jobs_score_list.append({
+                'id': job_id,
+                'title': job_title,
+                'company': company,
+                'description': job_description[:500],  # Truncate for output
+                'similarity_score': similarity_score
+            })
+
+    jobs_score_list.sort(key=lambda x: x['similarity_score'], reverse=True)
+
+    # Save results to output file
+    output_file = Path(r"C:\Users\Guy\Desktop\taker_texts_expiremtn") / "job_rankings.txt"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(f"CV: {cv_embedding['source_file']}\n")
+        f.write(f"Jobs analyzed: {len(jobs_score_list)}\n")
+        f.write("=" * 60 + "\n\n")
+
+        for rank, job in enumerate(jobs_score_list, 1):
+            f.write(f"#{rank} | Score: {job['similarity_score']:.4f}\n")
+            f.write(f"    {job['title']} @ {job['company']}\n")
+            f.write(f"    {job['description'][:200]}...\n\n")
+
+    logger.info("Results saved to %s", output_file)
+
+    return jobs_score_list
+
 
 
 class EmbeddingPlaygroundApp:
     def __init__(self) -> None:
-        self.logger = setup_logging()
         self.config = self._load_config()
         self.embedder: Optional[TextEmbedder] = None
 
@@ -54,7 +101,7 @@ class EmbeddingPlaygroundApp:
         try:
             return load_config()
         except Exception as exc:
-            self.logger.warning("Unable to load config.yaml: %s", exc)
+            logger.warning("Unable to load config.yaml: %s", exc)
             return {}
 
     def _resolve_model(self) -> str:
@@ -108,11 +155,13 @@ class EmbeddingPlaygroundApp:
         return file1, file2
 
     def _load_embedder(self) -> TextEmbedder:
-        if self.embedder is None:
-            model_name = self._resolve_model()
-            self.logger.info("Loading embedding model %s", model_name)
-            self.embedder = TextEmbedder(model_name=model_name, logger=self.logger)
-        return self.embedder
+        client = OpenAI(api_key=self.config.get('openai_api_key'))
+        return client
+        # if self.embedder is None:
+        #     model_name = self._resolve_model()
+        #     self.logger.info("Loading embedding model %s", model_name)
+        #     self.embedder = TextEmbedder(model_name=model_name, logger=self.logger)
+        # return self.embedder
 
     def _compare(self) -> None:
         try:
@@ -130,8 +179,11 @@ class EmbeddingPlaygroundApp:
             self.status_var.set("Generating embeddings...")
             self.root.update_idletasks()
 
-            embedding1 = embedder.embed_text(text1)
-            embedding2 = embedder.embed_text(text2)
+            embedding1 = embedder.embeddings.create(input=text1, model="text-embedding-3-small").data[0].embedding
+            embedding2 = embedder.embeddings.create(input=text2, model="text-embedding-3-small").data[0].embedding
+
+            # embedding1 = embedder.embed_text(text1)
+            # embedding2 = embedder.embed_text(text2)
 
             score = cosine_similarity(embedding1, embedding2)
             self.status_var.set(f"Cosine similarity: {score:.6f}")
@@ -150,5 +202,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
 
+
+    sample_cv_path = r"C:\Users\Guy\Desktop\taker_texts_expiremtn\CV-Ofek_Ben_Shlush.pdf"
+    cv_reader = CVProcessor()
+    text_embedder = TextEmbedder()
+    cv_embedding = cv_reader.process(sample_cv_path)
+    sample_batch_of_jobs(JobsDB(), text_embedder, cv_embedding)  # JobsDB() not JobsDB

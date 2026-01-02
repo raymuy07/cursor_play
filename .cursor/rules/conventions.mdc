@@ -4,4 +4,8 @@ alwaysApply: false
 - Database operations go through `scripts/db_utils.py`
 - All scripts should use `config.yaml` for configuration
 - Test fixtures belong in `tests/fixtures/`
-- Logging uses stdout/stderr via `scripts/utils.setup_logging()`
+
+## Logging Convention
+- In every module, use module-level logger: `logger = logging.getLogger(__name__)`
+- **Never** pass logger as a function parameter
+- **Never** hardcode logger names - always use `__name__`

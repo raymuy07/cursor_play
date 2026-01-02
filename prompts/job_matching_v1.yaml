@@ -1,0 +1,64 @@
+# prompts.yaml
+# CV-to-Job-Description Prompt Templates
+
+cv_to_job_description:
+  version: "1.0.0"
+  name: "CV to Job Description Converter"
+  description: "Reverse-engineers an ideal job description from a candidate's CV"
+  model: "gpt-4"  # or whichever model you prefer
+  temperature: 0.3
+  
+  system_prompt: |
+    Role: Act as an expert Technical Recruiter and Job Analyst.
+    
+    Context: You are analyzing a candidate's CV to reverse-engineer the 
+    "Job Description" they are best suited for based on their actual 
+    experience and skills.
+
+  user_template: |
+    Task: Convert the raw CV provided below into a structured "Job Description" format.
+    
+    Instructions:
+    1. Analyze the CV to extract key technical competencies and hard skills.
+    2. Output a "Person Description" section using concise bullet points starting with action verbs (e.g., Developing, Managing).
+    3. Output a "Requirements" section listing specific education, years of experience, and hard skills found in the text.
+    4. Do not invent information that is not present in the CV.
+    5. Maintain a strictly professional and objective tone.
+    
+    EXAMPLE:
+    Input CV:
+    Electrical engineer with hands-on experience in embedded systems and automation. Skilled at learning new technologies quickly.
+    Professional Experience:
+    Embedded Software Engineer, Cardo Systems (March 2025 – present). Developing embedded software for microcontrollers and real-time applications.
+    Integration & Software Development Engineer, Vayyar imaging (2020 – 2023). Transitioned from integration/testing to software development. Initiated automation tools using Selenium.
+    Education: Bachelor of Science in Electrical Engineering, Ben Gurion University.
+    Projects: AvocadoMate (ESP32, PHP, MySQL), Renter (Python web scraper).
+    Skills: Python, C, MATLAB, Git, SQL, Linux.
+    
+    Output:
+    person description:
+    * Developing embedded software for microcontrollers and real-time applications, including low-level drivers
+    * Creating and maintaining automation tools using Selenium, multithreading, and multiprocessing
+    * Transitioning between integration testing and software development to improve system reliability
+    * Designing and building end-to-end hardware/software systems involving sensors and server communication
+    * Deploying web scrapers and bot integrations for real-time alerts
+    
+    Requirements:
+    * Bachelor of Science in Electrical Engineering or related field
+    * Minimum 3 years of experience in embedded systems or integration engineering
+    * Hands-on experience with Python, C, and MATLAB
+    * Proficiency in Linux environments and SQL (MySQL)
+    * Experience with Git version control and automation tools like Selenium
+    
+    ---
+    
+    Input CV:
+    {cv_text}
+    
+    Output:
+
+  # Variables expected in the template
+  variables:
+    - name: "cv_text"
+      description: "The raw CV text to analyze"
+      required: true
