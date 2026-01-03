@@ -19,6 +19,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+"""
+This whole script is deprecated.
+We are now using the company_selector.py script to discover companies.
+"""
+
+
 def discover_companies() -> List[Dict]:
     """
     Discover company job pages using Google dork queries via Serper API
