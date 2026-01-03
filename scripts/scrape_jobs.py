@@ -437,14 +437,7 @@ def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
     return jobs
 
 
-def parse_timestamp(ts: Optional[str]) -> Optional[float]:
-    """Parse timestamp string to unix timestamp float. Returns None if parsing fails."""
-    if not ts:
-        return None
-    try:
-        return datetime.fromisoformat(ts.replace(' ', 'T')).timestamp()
-    except Exception:
-        return None
+
 
 
 def save_scraped_jobs_to_temp(jobs: List[Dict], temp_file_path: Optional[str] = None) -> str:
@@ -491,33 +484,6 @@ def recover_temp_files(jobs_db: JobsDB) -> None:
         logger.error(f"Failed to load scraped jobs from temp file: {e}")
         raise
 
-def select_companies_to_scrape(companies_db: CompaniesDB, config: Dict) -> List[Dict]:
-    # Attempt DB-side selection; if not supported, fall back to Python filtering
-    try:
-        to_scrape = companies_db.get_companies_to_scrape(
-            limit=config['max_companies_per_run'],
-            max_age_hours=config['max_age_hours'],
-        )
-    except Exception as exc:
-        logger.warning(f"DB-side scheduling query failed ({exc}); falling back to client-side filtering")
-        all_companies = companies_db.get_all_companies(active_only=True)
-        cutoff = datetime.utcnow().timestamp() - (config['max_age_hours'] * 3600)
-
-        def needs_scrape(company: Dict) -> bool:
-            ts = parse_timestamp(company.get('last_scraped'))
-            return ts is None or ts < cutoff
-
-        candidates = [c for c in all_companies if needs_scrape(c)]
-        # Sort: never-scraped first (None), then oldest scraped
-        candidates.sort(key=lambda c: parse_timestamp(c.get('last_scraped')) or 0)
-        to_scrape = candidates[:config['max_companies_per_run']]
-
-    if not to_scrape:
-        logger.info("No companies require scraping at this time.")
-        return
-
-    logger.info(f"Preparing to scrape {len(to_scrape)} company pages")
-    return to_scrape
 
 
 def scrape_jobs_from_companies(companies: List[Dict], config: Dict, companies_db: CompaniesDB) -> List[Dict]:
