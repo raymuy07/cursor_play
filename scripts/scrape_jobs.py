@@ -11,19 +11,27 @@ import requests
 from bs4 import BeautifulSoup
 import random
 
+from functools import partial
+import asyncio
+import aio_pika
+from scripts.queue import RabbitMQConnection
+
+
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Database access for companies and scrape scheduling
 from scripts.db_utils import CompaniesDB, JobsDB
 from common.utils import load_config
+from queue import CompanyQueue, JobQueue
 
 logger = logging.getLogger(__name__)
 
-class JobExtractor:
-    """Extract job information from HTML using multiple parsing strategies."""
+class JobScraper:
+    """In charge of the whole job scraping process
+    it will recieve an url of a company job page and will return a list of jobs as json"""
 
-    def __init__(self, html_content: str):
+    def __init__(self):
         self.html_content = html_content
         self.soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -242,18 +250,29 @@ class JobExtractor:
         return link['href'] if link else None
 
 
-def generate_url_hash(url: str) -> str:
-    """Generate a hash from a URL for unique identification."""
-    if not url:
-        return ""
-    return hashlib.md5(url.encode('utf-8')).hexdigest()
+    ##probably deprecated cause i want to post the clean jobs json to a rabbitmq queue
+    def save_scraped_jobs_to_temp(jobs: List[Dict], temp_file_path: Optional[str] = None) -> str:
+        """
+        Save scraped jobs to a temporary JSON file.
+        This allows recovery if database insertion fails.
+        """
+        if temp_file_path is None:
+            # Generate timestamped temp file in data directory
+            tmp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'temp')
+            os.makedirs(tmp_dir, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            temp_file_path = os.path.join(tmp_dir, f'temp_scraped_jobs_{timestamp}.json')
+
+        try:
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
+                json.dump(jobs, f, indent=2, ensure_ascii=False, default=str)
+            return temp_file_path
+        except Exception as e:
+            logger.error(f"Failed to save scraped jobs to temp file '{temp_file_path}': {e}")
+            raise
 
 
-def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
-    """Add a hash field to each job based on its URL."""
-    for job in jobs:
-        job['url_hash'] = generate_url_hash(job.get('url', ''))
-    return jobs
+
 
 
 def job_is_hebrew_filter(job: Dict) -> bool:
@@ -345,120 +364,101 @@ def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
 
     return valid_jobs, filter_counts
 
-def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
-    """
-    Save jobs to the jobs database using JobsDB.
-    Automatically handles duplicate detection (via URL uniqueness).
-    Filters out invalid jobs using filter_valid_jobs().
 
-    Args:
-        jobs: List of job dictionaries to save
-        jobs_db: JobsDB instance for database operations
-        logger: Optional logger instance
+class JobPersister:
 
-    Returns:
-        Tuple of (success, jobs_inserted, jobs_skipped) where:
-        - success: True if save operation completed without critical errors
-        - jobs_inserted: Number of new jobs successfully inserted
-        - jobs_skipped: Number of jobs skipped (duplicates or errors)
-    """
-    inserted = 0
-    skipped = 0
-    errors = 0
 
-    # Filter out invalid jobs using external filtering function
-    valid_jobs, filter_counts = filter_valid_jobs(jobs)
-    logger.info(f"Filter counts: {filter_counts}")
-    # Process only valid jobs
-    for job in valid_jobs:
-        try:
-            job_id = jobs_db.insert_job(job)
-            if job_id:
-                inserted += 1
-            else:
+    def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
+        """
+        Save jobs to the jobs database using JobsDB.
+        Automatically handles duplicate detection (via URL uniqueness).
+        Filters out invalid jobs using filter_valid_jobs().
+
+        Args:
+            jobs: List of job dictionaries to save
+            jobs_db: JobsDB instance for database operations
+            logger: Optional logger instance
+
+        Returns:
+            Tuple of (success, jobs_inserted, jobs_skipped) where:
+            - success: True if save operation completed without critical errors
+            - jobs_inserted: Number of new jobs successfully inserted
+            - jobs_skipped: Number of jobs skipped (duplicates or errors)
+        """
+        inserted = 0
+        skipped = 0
+        errors = 0
+
+        # Filter out invalid jobs using external filtering function
+        valid_jobs, filter_counts = filter_valid_jobs(jobs)
+        logger.info(f"Filter counts: {filter_counts}")
+        # Process only valid jobs
+        for job in valid_jobs:
+            try:
+                job_id = jobs_db.insert_job(job)
+                if job_id:
+                    inserted += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
                 skipped += 1
-        except Exception as e:
-            logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
-            skipped += 1
-            errors += 1
+                errors += 1
 
-    # Success if we processed jobs without too many errors (allow some failures)
-    success = errors == 0 or (errors < len(valid_jobs) * 0.5)  # Fail if >50% errors
+        # Success if we processed jobs without too many errors (allow some failures)
+        success = errors == 0 or (errors < len(valid_jobs) * 0.5)  # Fail if >50% errors
 
-    return success, inserted, skipped
+        return success, inserted, skipped
 
 
-def get_scraping_config() -> Dict:
-    """
-    Load scraping configuration from config.yaml job_scraping section.
-    Raises exception if config is missing or invalid.
-    """
-    cfg = load_config()
-    job_scraping = cfg.get('job_scraping', {})
-
-    if not job_scraping:
-        raise ValueError("Missing 'job_scraping' section in config.yaml")
-
-    return {
-        'max_age_hours': job_scraping['max_age_hours'],
-        'max_companies_per_run': job_scraping['max_companies_per_run'],
-        'rate_limit_delay': job_scraping['rate_limit_delay'],
-        'request_timeout': job_scraping['timeout'],
-        'user_agents': job_scraping['user_agents'],
-    }
+    def generate_url_hash(url: str) -> str:
+        """Generate a hash from a URL for unique identification."""
+        if not url:
+            return ""
+        return hashlib.md5(url.encode('utf-8')).hexdigest()
 
 
-def fetch_html(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
-    """Fetch HTML content for a given URL using requests."""
-
-    headers = {
-        'User-Agent': user_agent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'close',
-    }
-    try:
-        sess = session or requests.Session()
-        resp = sess.get(url, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            return resp.text
-        return None
-    except requests.RequestException:
-        return None
+    def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
+        """Add a hash field to each job based on its URL."""
+        for job in jobs:
+            job['url_hash'] = generate_url_hash(job.get('url', ''))
+        return jobs
 
 
-def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
-    """Ensure jobs include company_name and source from the company record when missing."""
-    for job in jobs:
-        if not job.get('company_name'):
-            job['company_name'] = company.get('company_name')
-        if not job.get('source') and company.get('domain'):
-            job['source'] = company.get('domain')
-    return jobs
+    def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
+        """Ensure jobs include company_name and source from the company record when missing."""
+        for job in jobs:
+            if not job.get('company_name'):
+                job['company_name'] = company.get('company_name')
+            if not job.get('source') and company.get('domain'):
+                job['source'] = company.get('domain')
+        return jobs
+
+    # def get_scraping_config() -> Dict:
+    #     """
+    #     Load scraping configuration from config.yaml job_scraping section.
+    #     Raises exception if config is missing or invalid.
+    #     """
+    #     cfg = load_config()
+    #     job_scraping = cfg.get('job_scraping', {})
+
+    #     if not job_scraping:
+    #         raise ValueError("Missing 'job_scraping' section in config.yaml")
+
+    #     return {
+    #         'max_age_hours': job_scraping['max_age_hours'],
+    #         'max_companies_per_run': job_scraping['max_companies_per_run'],
+    #         'rate_limit_delay': job_scraping['rate_limit_delay'],
+    #         'request_timeout': job_scraping['timeout'],
+    #         'user_agents': job_scraping['user_agents'],
+    #     }
 
 
 
 
 
-def save_scraped_jobs_to_temp(jobs: List[Dict], temp_file_path: Optional[str] = None) -> str:
-    """
-    Save scraped jobs to a temporary JSON file.
-    This allows recovery if database insertion fails.
-    """
-    if temp_file_path is None:
-        # Generate timestamped temp file in data directory
-        tmp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'temp')
-        os.makedirs(tmp_dir, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        temp_file_path = os.path.join(tmp_dir, f'temp_scraped_jobs_{timestamp}.json')
 
-    try:
-        with open(temp_file_path, 'w', encoding='utf-8') as f:
-            json.dump(jobs, f, indent=2, ensure_ascii=False, default=str)
-        return temp_file_path
-    except Exception as e:
-        logger.error(f"Failed to save scraped jobs to temp file '{temp_file_path}': {e}")
-        raise
+
 
 
 def recover_temp_files(jobs_db: JobsDB) -> None:
@@ -486,7 +486,74 @@ def recover_temp_files(jobs_db: JobsDB) -> None:
 
 
 
-def scrape_jobs_from_companies(companies: List[Dict], config: Dict, companies_db: CompaniesDB) -> List[Dict]:
+
+
+
+
+async def fetch_html_from_url(url: str, session: Optional[requests.Session], timeout: int, user_agent: str) -> Optional[str]:
+    """Fetch HTML content for a given URL using requests."""
+    """I think this is a key function cause we may encounter problems with fetching html on a proxy"""
+
+    headers = {
+        'User-Agent': user_agent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'close',
+    }
+    try:
+        resp = session.get(url, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.text
+        return None
+    except requests.RequestException:
+        return None
+
+
+
+async def process_company(message: aio_pika.IncomingMessage, job_queue:JobQueue):
+    """ this function in charge of consuming the company_queue urls and to scrpae them using the JobScraper"""
+    async with message.process():
+        company = json.loads(message.body)
+        html =  fetch_html_from_url(company['job_page_url'])
+
+
+        scraper = JobScraper()
+        clean_jobs = scraper.extract_jobs(html)
+
+        ## I need to think how to seperate the jobs. by comma?
+        if clean_jobs:
+            job_queue.publish_batch()
+
+
+
+async def consume():
+
+    connection = await aio_pika.connect_robust("amqp://localhost/")
+    rabbitmq = RabbitMQConnection()
+    job_queue = JobQueue(rabbitmq)
+
+    channel = await connection.channel()
+    queue = await channel.declare_queue("companies_to_scrape", durable=True)
+
+
+    ###???
+    scraper = JobScraper()
+
+    callback = partial(process_company,job_queue=job_queue)
+
+    await queue.consume(callback)
+
+    # that makes a promise that is never resolved.
+    await asyncio.Future()
+
+
+
+
+
+
+
+
+def scrape_jobs_from_companies_deprecated(companies: List[Dict], config: Dict, companies_db: CompaniesDB) -> List[Dict]:
 
     new_jobs_total: List[Dict] = []
     temp_file_path = None
@@ -510,7 +577,7 @@ def scrape_jobs_from_companies(companies: List[Dict], config: Dict, companies_db
                 time.sleep(config['rate_limit_delay'])
                 continue
 
-            extractor = JobExtractor(html)
+            extractor = JobScraper(html)
             extracted = extractor.extract_jobs() or []
             extracted = enrich_jobs_with_company(extracted, company)
             extracted = add_hash_to_jobs(extracted)
@@ -564,7 +631,7 @@ def run_scrape() -> None:
     recover_temp_files(jobs_db)
 
     to_scrape = select_companies_to_scrape(companies_db, config)
-    new_jobs_total, temp_file_path = scrape_jobs_from_companies(to_scrape, config, companies_db)
+    new_jobs_total, temp_file_path = scrape_jobs_from_companies_deprecated(to_scrape, config, companies_db)
 
 
 
@@ -594,4 +661,4 @@ def run_scrape() -> None:
 
 
 if __name__ == "__main__":
-    run_scrape()
+    asyncio.run(consume())

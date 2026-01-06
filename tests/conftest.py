@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.db_schema import get_companies_schema, get_jobs_schema  # noqa: E402
 from scripts.db_utils import CompaniesDB, JobsDB, initialize_database  # noqa: E402
-from scripts.scrape_jobs import JobExtractor, add_hash_to_jobs  # noqa: E402
+from scripts.scrape_jobs import JobScraper, add_hash_to_jobs  # noqa: E402
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -84,7 +84,7 @@ def parse_fixture_jobs(
 
     def _parser(name: str, *, persist: bool | None = None) -> List[Dict]:
         html_content = load_fixture_html(name)
-        extractor = JobExtractor(html_content)
+        extractor = JobScraper(html_content)
         jobs = add_hash_to_jobs(extractor.extract_jobs())
         sanitized = _sanitize_jobs(jobs)
 
