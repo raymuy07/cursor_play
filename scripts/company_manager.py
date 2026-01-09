@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict
 from datetime import datetime
 from scripts.db_utils import CompaniesDB
-from scripts.queue import CompanyQueue
+from message_queue import CompanyQueue
 from common.utils import load_config
 
 import json
@@ -161,17 +161,25 @@ class CompanyManager:
         - Comeet: "Jobs at Flare - Comeet" -> "Flare"
         - Lever: title is the company name directly
         """
+        if not title:
+            return None
+
+        name = title
         if domain == "comeet.com":
             # Format: "Jobs at {name} - Comeet"
-            name = title.replace("Jobs at ", "").replace(" - Comeet", "").strip()
-            return name if name else None
+            name = name.replace("Jobs at ", "").replace(" - Comeet", "")
 
-        if domain == "lever.co":
-            # Lever titles are just the company name
-            return title.strip() if title else None
+        # General cleaning for all domains
+        name = name.strip()
 
-        # Fallback for other domains
-        return title.strip() if title else None
+        # Lever titles are just the company name
+
+        # Remove trailing separators and extra whitespace
+        # This handles cases like "Company Name -" or "Company Name |"
+        while name and name[-1] in ('-', '|', ':', '·'):
+            name = name[:-1].strip()
+
+        return name if name else None
 
 
     def _clean_job_page_url(self, url: str) -> str:
