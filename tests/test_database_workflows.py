@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.scrape_jobs import filter_valid_jobs, save_jobs_to_db
+from scripts.job_filter_parser import filter_valid_jobs, save_jobs_to_db
 
 
 def test_companies_db_crud(temp_companies_db):

@@ -16,14 +16,9 @@ import aio_pika
 
 
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from message_queue import RabbitMQConnection
-from common.utils import setup_logging
+from scripts.message_queue import RabbitMQConnection, CompanyQueue, JobQueue
 from scripts.db_utils import CompaniesDB, JobsDB
-from common.utils import load_config
-from message_queue import CompanyQueue, JobQueue
+from common.utils import setup_logging, load_config
 
 logger = logging.getLogger(__name__)
 

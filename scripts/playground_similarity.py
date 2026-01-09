@@ -2,22 +2,18 @@
 """GUI playground for comparing two files using embeddings and cosine similarity."""
 
 import os
-import sys
-from pathlib import Path
-from typing import Optional
+import logging
 import random
+from pathlib import Path
+from typing import Optional, List, Dict
+
 import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from db_utils import JobsDB
-from typing import List, Dict, Optional
-import logging
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from common.utils import TextEmbedder
+from scripts.db_utils import JobsDB
 from scripts.embed_cv import CVProcessor
-from common.utils import load_config, setup_logging
+from common.utils import TextEmbedder, load_config, setup_logging
 
 
 logger = logging.getLogger(__name__)

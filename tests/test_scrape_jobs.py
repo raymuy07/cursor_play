@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 
-from scripts.scrape_jobs import JobScraper, add_hash_to_jobs
+from scripts.job_scraper import JobScraper
+from scripts.job_filter_parser import add_hash_to_jobs
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
