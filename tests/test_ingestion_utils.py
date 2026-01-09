@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.scrape_jobs import (
+from scripts.job_filter_parser import (
     add_hash_to_jobs,
     filter_valid_jobs,
     generate_url_hash,

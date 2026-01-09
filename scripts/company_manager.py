@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict
 from datetime import datetime
 from scripts.db_utils import CompaniesDB
-from message_queue import CompanyQueue
+from scripts.message_queue import CompanyQueue
 from common.utils import load_config
 
 import json

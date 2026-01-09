@@ -10,15 +10,11 @@ This script:
 """
 
 import os
-import sys
 import json
 import pickle
 import logging
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.utils import load_config
 

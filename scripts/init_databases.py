@@ -5,14 +5,9 @@ Creates and initializes both search_queries.db and companies_pages.db
 """
 
 import os
-import sys
 import logging
 
-
 logger = logging.getLogger(__name__)
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.db_schema import get_search_queries_schema, get_companies_schema, get_jobs_schema
 from scripts.db_utils import (
