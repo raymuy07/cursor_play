@@ -83,14 +83,14 @@ def parse_fixture_jobs(
     """Parse jobs from an HTML fixture and optionally persist a JSON snapshot."""
     # Lazy imports to avoid cascading import errors for unrelated tests
     from scripts.job_scraper import JobScraper
-    from scripts.job_filter_parser import add_hash_to_jobs
+    from scripts.job_filter_parser import JobPersister
 
     update_snapshots = request.config.getoption("--update-job-snapshots")
 
     def _parser(name: str, *, persist: bool | None = None) -> List[Dict]:
         html_content = load_fixture_html(name)
         extractor = JobScraper(html_content)
-        jobs = add_hash_to_jobs(extractor.extract_jobs())
+        jobs = JobPersister.add_hash_to_jobs(extractor.extract_jobs())
         sanitized = _sanitize_jobs(jobs)
 
         should_persist = persist if persist is not None else update_snapshots
