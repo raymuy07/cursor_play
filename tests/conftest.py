@@ -16,11 +16,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from scripts.db_schema import get_companies_schema, get_jobs_schema  # noqa: E402
-from scripts.db_utils import CompaniesDB, JobsDB, initialize_database  # noqa: E402
-from scripts.scrape_jobs import JobScraper, add_hash_to_jobs  # noqa: E402
-
-
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SNAPSHOT_DIR = FIXTURES_DIR / "parsed_snapshots"
 
@@ -54,6 +49,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "integration: marks tests as integration tests (require external services)"
+    )
+
+
 @pytest.fixture(scope="session")
 def html_fixture_names() -> List[str]:
     """All HTML fixture stem names available under `tests/fixtures`."""
@@ -79,6 +81,9 @@ def parse_fixture_jobs(
     request: pytest.FixtureRequest, load_fixture_html
 ) -> Callable[[str], List[Dict]]:
     """Parse jobs from an HTML fixture and optionally persist a JSON snapshot."""
+    # Lazy imports to avoid cascading import errors for unrelated tests
+    from scripts.job_scraper import JobScraper
+    from scripts.job_filter_parser import add_hash_to_jobs
 
     update_snapshots = request.config.getoption("--update-job-snapshots")
 
@@ -113,8 +118,10 @@ def parsed_job_snapshots(parse_fixture_jobs, html_fixture_names) -> Dict[str, Li
 
 
 @pytest.fixture()
-def temp_companies_db(tmp_path) -> CompaniesDB:
+def temp_companies_db(tmp_path):
     """Provision an isolated companies.db for tests."""
+    from scripts.db_schema import get_companies_schema
+    from scripts.db_utils import CompaniesDB, initialize_database
 
     db_path = tmp_path / "companies.db"
     initialize_database(str(db_path), get_companies_schema())
@@ -122,8 +129,10 @@ def temp_companies_db(tmp_path) -> CompaniesDB:
 
 
 @pytest.fixture()
-def temp_jobs_db(tmp_path) -> JobsDB:
+def temp_jobs_db(tmp_path):
     """Provision an isolated jobs.db for tests."""
+    from scripts.db_schema import get_jobs_schema
+    from scripts.db_utils import JobsDB, initialize_database
 
     db_path = tmp_path / "jobs.db"
     initialize_database(str(db_path), get_jobs_schema())

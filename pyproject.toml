@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobtaker"
+version = "0.1.0"
+description = "Job scraping and matching pipeline"
+requires-python = ">=3.9"
+dependencies = [
+    "playwright",
+    "requests",
+    "beautifulsoup4",
+    "pydantic",
+    "python-dotenv",
+    "openai",
+    "python-telegram-bot",
+    "APScheduler",
+    "sentence-transformers",
+    "PyPDF2",
+    "python-docx",
+    "numpy",
+    "aio-pika",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.setuptools.packages.find]
+include = ["scripts*", "common*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (require external services like RabbitMQ)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

@@ -5,14 +5,11 @@ Filters records from a database based on specified criteria and exports to JSON.
 Designed to be versatile and work with different databases and tables.
 """
 
-import sys
 import os
 import json
 from typing import List, Dict, Any, Optional
 import logging
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.db_utils import get_db_connection, JOBS_DB
 
 logger = logging.getLogger(__name__)
