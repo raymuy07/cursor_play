@@ -4,15 +4,11 @@ Extracts text from CV files (PDF or DOCX), transforms via LLM, and generates emb
 """
 
 import os
-import sys
 import re
 import logging
 from pathlib import Path
 from typing import Dict
 import yaml
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.utils import load_config, TextEmbedder
 from openai import OpenAI

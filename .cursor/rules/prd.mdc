@@ -3,20 +3,73 @@
 - Supports filtering, vector similarity matching, and AI-powered job scoring against user CVs
 - Embeddings computed once and reused: job embeddings pre-computed at ingestion, CV embeddings per user
 
+# Architecture
+
+## Pipeline Overview
+```
+[Company Discovery] → [Companies Queue] → [Scraper Worker] → [Jobs Queue] → [Embedder Worker] → [Jobs DB]
+                                                ↓
+                                          Parse HTML
+                                          Clean jobs
+```
+
+## Workers (Async with RabbitMQ)
+
+### 1. Company Discovery (`scripts/company_manager.py`)
+- Searches for company job pages using Google Serper API
+- Publishes stale companies to `companies_queue` for re-scraping
+- Domain-specific extraction (Comeet, Lever, etc.)
+
+### 2. Scraper Worker (`scripts/scrape_jobs.py`)
+- **Consumes**: `companies_queue` (company URLs)
+- **Produces**: `jobs_queue` (parsed job batches)
+- Fetches HTML using http
+- Parses jobs from HTML (domain-specific strategies)
+- Enriches with company metadata
+
+### 3. Embedder Worker (`scripts/embed_jobs.py`)
+- **Consumes**: `jobs_queue` (job batches)
+- **Produces**: Jobs with embeddings → SQLite
+- Processes jobs in batches for efficient embedding
+- Saves to `jobs.db` with pre-computed vectors
+
+## User-Facing (Future)
+- API layer for job search with filters (location, department, type, etc.)
+- SQL WHERE clauses reduce search space
+- Vector similarity on filtered results → ranks candidates
+- Top N passed to AI for detailed scoring
 
 # Data Flow
-1.**Data Fetching and ingestion**
-- `scripts/discover_companies.py` seeds `companies.db` with sources from external search.
-- `scripts/scrape_jobs.py` pulls postings into SQLite and enriches them with metadata.
 
-2. **Matching Pipeline**
-   - User applies filters (location, department, etc.) → SQL WHERE clauses reduce search space
-   - `scripts/embed_cv.py` generates CV embedding (computed once per CV upload)
-   - Vector similarity search on filtered jobs → ranks all candidates
-   - Top N candidates passed to AI API for detailed scoring
-   - Results cached for pagination without re-computation
+1. **Discovery & Ingestion**
+   - `company_manager.py` discovers companies via Google dork searches
+   - Companies stored in `companies.db`, published to queue when stale
+
+2. **Scraping Pipeline**
+   - Scraper worker consumes companies, fetches HTML, parses jobs
+   - Parsed jobs published to jobs queue in batches
+
+3. **Embedding & Storage**
+   - Embedder worker consumes job batches
+   - Computes embeddings, persists to `jobs.db`
+
+4. **Matching Pipeline**
+   - User applies filters → SQL reduces search space
+   - `embed_cv.py` generates CV embedding (once per CV)
+   - Vector similarity ranks filtered jobs
+   - AI scoring on top N results (lazy, expensive)
+
+# Key Files
+- `scripts/queue.py` - RabbitMQ connection, CompanyQueue, JobQueue
+- `scripts/company_manager.py` - Company discovery & queue publishing
+- `scripts/scrape_jobs.py` - Async scraper worker, job parsing
+- `scripts/embed_jobs.py` - Batch embedding worker
+- `scripts/db_utils.py` - CompaniesDB, JobsDB (SQLite)
 
 # Architecture Decisions
+- **Async workers with RabbitMQ** for scalable, decoupled processing
 - **Single centralized job DB** with pre-computed embeddings (not per-user DBs)
+- **Batch processing** for embeddings (efficient API usage)
+- **Domain-specific parsers** (Comeet, Lever, etc.) - simple, not over-engineered
 - **Filter → Embed → AI scoring** pipeline minimizes expensive operations
 - **Lazy AI scoring**: Vector similarity on all filtered results (fast), AI scoring only on displayed results (expensive)

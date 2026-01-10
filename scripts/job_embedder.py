@@ -5,15 +5,11 @@ Uses the same TextEmbedder class as CV embedding for consistency.
 """
 
 import os
-import sys
 import pickle
 import time
 import argparse
 import logging
 from typing import Optional
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.utils import load_config, TextEmbedder
 from scripts.db_utils import JobsDB

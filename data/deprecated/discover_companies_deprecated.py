@@ -19,6 +19,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+"""
+This whole script is deprecated.
+We are now using the company_selector.py script to discover companies.
+"""
+
+
 def discover_companies() -> List[Dict]:
     """
     Discover company job pages using Google dork queries via Serper API
@@ -86,7 +93,7 @@ def discover_companies() -> List[Dict]:
     return companies_db.get_all_companies()
 
 
-def search_domain_jobs(domain: str, config: Dict, search_db: SearchQueriesDB = None, companies_db: CompaniesDB = None) -> int:
+def search_domain_jobs(domain: str, config: Dict, companies_db: CompaniesDB = None) -> int:
     """
     Search for job pages on a specific domain using Serper API
     Returns the count of new companies added to the database
@@ -164,13 +171,8 @@ def search_domain_jobs(domain: str, config: Dict, search_db: SearchQueriesDB = N
             logger.error(f"Error processing {domain} page {page}: {e}")
             break
 
-    # Log search query with total results count to database
-    if search_db:
-        try:
-            search_db.log_search(domain, query, 'google_serper', total_results_count)
-            logger.info(f"Logged search for {domain}: {total_results_count} total results collected, {new_companies_count} new companies added")
-        except Exception as e:
-            logger.warning(f"Failed to log search query: {e}")
+
+        logger.info(f"Logged search for {domain}: {total_results_count} total results collected, {new_companies_count} new companies added")
 
     return new_companies_count
 
