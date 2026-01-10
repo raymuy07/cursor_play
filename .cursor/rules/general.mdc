@@ -2,5 +2,6 @@
 alwaysApply: true
 ---
 - When asked to plan refrence @prd.mdc, then if asked to build, create a new branch with relevant name, checkout, and then build
+- NEVER modify any database (.db) files directly or via scripts. You are restricted to READ-ONLY access to databases. If a database modification is required, provide the instructions or script for the user to execute manually.
 
 

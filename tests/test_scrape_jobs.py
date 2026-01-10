@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 
-from scripts.scrape_jobs import JobExtractor, add_hash_to_jobs
+from scripts.job_scraper import JobScraper
+from scripts.job_filter_parser import JobPersister
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -15,7 +16,7 @@ def load_fixture_html(filename: str) -> str:
 
 def extract_jobs_from_fixture(filename: str):
     html = load_fixture_html(filename)
-    extractor = JobExtractor(html)
+    extractor = JobScraper(html)
     return extractor.extract_jobs()
 
 
