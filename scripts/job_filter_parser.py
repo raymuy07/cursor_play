@@ -2,10 +2,14 @@ import hashlib
 from typing import List, Dict
 from scripts.db_utils import JobsDB
 import logging
+
 logger = logging.getLogger(__name__)
 
-class JobPersister:
 
+class JobPersister:
+    """Handles persistence of job batches to the database."""
+
+    @staticmethod
     def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
         """
         Save jobs to the jobs database using JobsDB.
@@ -15,7 +19,6 @@ class JobPersister:
         Args:
             jobs: List of job dictionaries to save
             jobs_db: JobsDB instance for database operations
-            logger: Optional logger instance
 
         Returns:
             Tuple of (success, jobs_inserted, jobs_skipped) where:
@@ -28,7 +31,7 @@ class JobPersister:
         errors = 0
 
         # Filter out invalid jobs using external filtering function
-        valid_jobs, filter_counts = filter_valid_jobs(jobs)
+        valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
         logger.info(f"Filter counts: {filter_counts}")
         # Process only valid jobs
         for job in valid_jobs:
@@ -48,21 +51,21 @@ class JobPersister:
 
         return success, inserted, skipped
 
-
+    @staticmethod
     def generate_url_hash(url: str) -> str:
         """Generate a hash from a URL for unique identification."""
         if not url:
             return ""
         return hashlib.md5(url.encode('utf-8')).hexdigest()
 
-
+    @staticmethod
     def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
         """Add a hash field to each job based on its URL."""
         for job in jobs:
-            job['url_hash'] = generate_url_hash(job.get('url', ''))
+            job['url_hash'] = JobPersister.generate_url_hash(job.get('url', ''))
         return jobs
 
-
+    @staticmethod
     def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
         """Ensure jobs include company_name and source from the company record when missing."""
         for job in jobs:
@@ -73,10 +76,11 @@ class JobPersister:
         return jobs
 
 
-
 class JobFilter:
+    """Handles filtering and validation of job batches."""
 
-    def job_is_hebrew_filter(job: Dict) -> bool:
+    @staticmethod
+    def is_hebrew_job(job: Dict) -> bool:
         """
         Check if a job contains Hebrew text.
 
@@ -116,12 +120,13 @@ class JobFilter:
 
         return False
 
+    @staticmethod
     def is_in_israel_filter(job: Dict) -> bool:
-
+        """Check if the job location contains 'ISRAEL'."""
         location = job.get('location', '')
         return "ISRAEL" in location
 
-
+    @staticmethod
     def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
         """
         Filter jobs based on validation criteria.
@@ -143,12 +148,12 @@ class JobFilter:
         for job in jobs:
 
             # Filter: Jobs not in Israel
-            if not is_in_israel_filter(job):
+            if not JobFilter.is_in_israel_filter(job):
                 filter_counts['job_not_in_israel'] += 1
                 continue
 
             # Filter: Hebrew jobs
-            if job_is_hebrew_filter(job):
+            if JobFilter.is_hebrew_job(job):
                 filter_counts['hebrew'] += 1
                 continue
 

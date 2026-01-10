@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.job_filter_parser import filter_valid_jobs, save_jobs_to_db
+from scripts.job_filter_parser import JobFilter, JobPersister
 
 
 def test_companies_db_crud(temp_companies_db):
@@ -74,18 +74,16 @@ def test_save_jobs_flow_with_html_fixtures(temp_jobs_db, parse_fixture_jobs, htm
     fixture_name = html_fixture_names[0]
     parsed_jobs = parse_fixture_jobs(fixture_name)
 
-    valid_jobs, filter_counts = filter_valid_jobs(deepcopy(parsed_jobs))
+    valid_jobs, filter_counts = JobFilter.filter_valid_jobs(deepcopy(parsed_jobs))
 
-    inserted, skipped, hebrew_count, general_count = save_jobs_to_db(
+    success, inserted, skipped = JobPersister.save_jobs_to_db(
         deepcopy(parsed_jobs), temp_jobs_db
     )
 
     assert inserted + skipped == len(valid_jobs)
-    assert hebrew_count == filter_counts["hebrew"]
-    assert general_count == filter_counts["general_department"]
     assert temp_jobs_db.count_jobs() == inserted
 
-    inserted_again, skipped_again, *_ = save_jobs_to_db(
+    success_again, inserted_again, skipped_again = JobPersister.save_jobs_to_db(
         deepcopy(parsed_jobs), temp_jobs_db
     )
     assert inserted_again == 0
