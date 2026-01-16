@@ -4,23 +4,25 @@ Database Utilities
 Provides connection management and common operations for SQLite databases
 """
 
-import sqlite3
 import hashlib
-import os
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from contextlib import contextmanager
 import logging
+import os
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime
+
+import aiosqlite
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
 
 
 # Database paths
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-SEARCH_QUERIES_DB = os.path.join(DATA_DIR, 'search_queries.db')
-COMPANIES_DB = os.path.join(DATA_DIR, 'companies.db')
-JOBS_DB = os.path.join(DATA_DIR, 'jobs.db')
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+SEARCH_QUERIES_DB = os.path.join(DATA_DIR, "search_queries.db")
+COMPANIES_DB = os.path.join(DATA_DIR, "companies.db")
+JOBS_DB = os.path.join(DATA_DIR, "jobs.db")
+PENDING_EMBEDDED_DB = os.path.join(DATA_DIR, "pending_embedded.db")
 
 
 def ensure_data_directory():
@@ -73,13 +75,6 @@ def generate_job_hash(url: str, title: str = "") -> str:
     """
     Generate a unique hash for a job posting.
     Uses URL as primary identifier, with title as backup.
-
-    Args:
-        url: Job URL
-        title: Job title (optional)
-
-    Returns:
-        MD5 hash string
     """
     if not url:
         # If no URL, use title + timestamp (less ideal but handles edge cases)
@@ -87,14 +82,73 @@ def generate_job_hash(url: str, title: str = "") -> str:
     else:
         content = url
 
-    return hashlib.md5(content.encode('utf-8')).hexdigest()
+    return hashlib.md5(content.encode("utf-8")).hexdigest()
 
+
+"""This will be our first async db, so we will use aiosqlite"""
+
+
+class PendingEmbeddedDB:
+    """Interface for pending_embedded.db operations"""
+
+    def __init__(self, db_path: str = PENDING_EMBEDDED_DB):
+        self.db_path = db_path
+        self.initialize_database()
+
+    def initialize_database(self):
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pending_batches (
+                    batch_id TEXT PRIMARY KEY,
+                    status TEXT CHECK(status IN ('processing', 'completed', 'failed')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+
+    async def insert_pending_batch_id(self, db: aiosqlite.Connection, batch_id: str):
+        try:
+            await db.execute(
+                """
+                    INSERT INTO pending_batches (batch_id, status) VALUES (?, ?)
+                """,
+                (batch_id, "processing"),
+            )
+            await db.commit()
+            return True
+        except aiosqlite.IntegrityError:
+            return False
+
+    async def get_processing_batches(self, db: aiosqlite.Connection):
+        """Returns all batches that are currently being processed."""
+        try:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM pending_batches WHERE status = 'processing'") as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Error fetching processing batches: {e}")
+            return []
+
+    async def update_batch_status(self, db: aiosqlite.Connection, batch_id: str, status: str) -> bool:
+        """Update the status of an existing batch."""
+        try:
+            await db.execute(
+                "UPDATE pending_batches SET status = ? WHERE batch_id = ?",
+                (status, batch_id),
+            )
+            await db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating batch {batch_id}: {e}")
+            return False
 
 class CompaniesDB:
     """Interface for companies.db operations"""
 
-    def __init__(self, db_path: str = COMPANIES_DB):
-        self.db_path = db_path
+    def __init__(self):
+        self.db_path = COMPANIES_DB
 
     def insert_company(self, company_data: Dict[str, Any]) -> Optional[int]:
         """
@@ -111,12 +165,12 @@ class CompaniesDB:
                     VALUES (?, ?, ?, ?, ?)
                     """,
                     (
-                        company_data.get('company_name'),
-                        company_data.get('domain'),
-                        company_data.get('job_page_url'),
-                        company_data.get('title'),
-                        company_data.get('source', 'google_serper')
-                    )
+                        company_data.get("company_name"),
+                        company_data.get("domain"),
+                        company_data.get("job_page_url"),
+                        company_data.get("title"),
+                        company_data.get("source", "google_serper"),
+                    ),
                 )
                 return cursor.lastrowid
 
@@ -136,7 +190,7 @@ class CompaniesDB:
                 SET last_scraped = CURRENT_TIMESTAMP
                 WHERE job_page_url = ?
                 """,
-                (job_page_url,)
+                (job_page_url,),
             )
             return cursor.rowcount > 0
 
@@ -152,7 +206,7 @@ class CompaniesDB:
                 SET is_active = 0
                 WHERE job_page_url = ?
                 """,
-                (job_page_url,)
+                (job_page_url,),
             )
             return cursor.rowcount > 0
 
@@ -176,10 +230,7 @@ class CompaniesDB:
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM companies WHERE job_page_url = ?",
-                (job_page_url,)
-            )
+            cursor.execute("SELECT * FROM companies WHERE job_page_url = ?", (job_page_url,))
             row = cursor.fetchone()
             return dict(row) if row else None
 
@@ -208,7 +259,6 @@ class CompaniesDB:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-
     def get_stale_companies(self, max_age_hours: int) -> List[Dict[str, Any]]:
         """Get companies not scraped within max_age_hours."""
 
@@ -221,10 +271,9 @@ class CompaniesDB:
                 AND (last_scraped IS NULL OR last_scraped < datetime('now', '-' || ? || ' hours'))
                 ORDER BY last_scraped ASC NULLS FIRST
                 """,
-                (max_age_hours,)
+                (max_age_hours,),
             )
             return [dict(row) for row in cursor.fetchall()]
-
 
     def get_all_companies(self, active_only: bool = True, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
@@ -309,7 +358,7 @@ class JobsDB:
                 SELECT department_id FROM department_synonyms
                 WHERE synonym = ? COLLATE NOCASE
                 """,
-                (raw_dept.strip(),)
+                (raw_dept.strip(),),
             )
             result = cursor.fetchone()
             if result:
@@ -321,7 +370,7 @@ class JobsDB:
                 SELECT id FROM departments
                 WHERE canonical_name = ? COLLATE NOCASE
                 """,
-                (raw_dept.strip(),)
+                (raw_dept.strip(),),
             )
             result = cursor.fetchone()
             if result:
@@ -347,7 +396,7 @@ class JobsDB:
 
         # Handle locations with multiple parts (e.g., "City, IL")
         # Extract main location before commas or parentheses
-        clean_loc = raw_loc.split(',')[0].strip()
+        clean_loc = raw_loc.split(",")[0].strip()
 
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
@@ -358,7 +407,7 @@ class JobsDB:
                 SELECT location_id FROM location_synonyms
                 WHERE synonym = ? COLLATE NOCASE
                 """,
-                (clean_loc,)
+                (clean_loc,),
             )
             result = cursor.fetchone()
             if result:
@@ -370,7 +419,7 @@ class JobsDB:
                 SELECT id FROM locations
                 WHERE canonical_name = ? COLLATE NOCASE
                 """,
-                (clean_loc,)
+                (clean_loc,),
             )
             result = cursor.fetchone()
             if result:
@@ -396,33 +445,32 @@ class JobsDB:
         """
         try:
             # Validate required fields
-            url = job_data.get('url')
+            url = job_data.get("url")
             if not url:
                 logger.error("Cannot insert job without URL")
                 return None
 
             # Normalize department and location
-            dept_id = self.get_department_id(job_data.get('department'))
-            loc_id = self.get_location_id(job_data.get('location'))
+            dept_id = self.get_department_id(job_data.get("department"))
+            loc_id = self.get_location_id(job_data.get("location"))
 
             # Handle description - convert dict to text if needed
-            description = job_data.get('description', '')
+            description = job_data.get("description", "")
             if isinstance(description, dict):
-                description = '\n\n'.join(f"{k}:\n{v}" for k, v in description.items() if v)
+                description = "\n\n".join(f"{k}:\n{v}" for k, v in description.items() if v)
 
             # Generate URL hash
-            url_hash = generate_job_hash(url, job_data.get('title', ''))
+            url_hash = generate_job_hash(url, job_data.get("title", ""))
 
             # Parse from_domain from URL
             from_domain = None
             if url:
                 from urllib.parse import urlparse
+
                 from_domain = urlparse(url).netloc
 
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
-
-
 
                 cursor.execute(
                     """
@@ -436,32 +484,32 @@ class JobsDB:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        job_data.get('title'),
-                        job_data.get('company_name'),
-                        job_data.get('department'),
+                        job_data.get("title"),
+                        job_data.get("company_name"),
+                        job_data.get("department"),
                         dept_id,
-                        job_data.get('location'),
+                        job_data.get("location"),
                         loc_id,
-                        job_data.get('workplace_type'),
-                        job_data.get('experience_level'),
-                        job_data.get('employment_type', 'Full-time'),
-                        job_data.get('last_updated') or job_data.get('publish_date'),
+                        job_data.get("workplace_type"),
+                        job_data.get("experience_level"),
+                        job_data.get("employment_type", "Full-time"),
+                        job_data.get("last_updated") or job_data.get("publish_date"),
                         description,
-                        job_data.get('uid'),
+                        job_data.get("uid"),
                         url,
                         url_hash,
                         from_domain,
-                        job_data.get('email'),
-                        job_data.get('is_ai_inferred', False),
-                        job_data.get('original_website_job_url')
-                    )
+                        job_data.get("email"),
+                        job_data.get("is_ai_inferred", False),
+                        job_data.get("original_website_job_url"),
+                    ),
                 )
                 return cursor.lastrowid
 
         except sqlite3.IntegrityError as e:
             # Check if it's a URL duplicate (most common case)
             error_msg = str(e).lower()
-            if 'url' in error_msg or 'unique constraint' in error_msg:
+            if "url" in error_msg or "unique constraint" in error_msg:
                 # Likely a duplicate URL or hash collision
                 return None
             else:
@@ -493,7 +541,7 @@ class JobsDB:
                     SET embedding = ?
                     WHERE id = ?
                     """,
-                    (embedding, job_id)
+                    (embedding, job_id),
                 )
                 return cursor.rowcount > 0
         except Exception as e:
@@ -542,7 +590,7 @@ class JobsDB:
                 cursor.execute("PRAGMA table_info(jobs)")
                 columns = [row[1] for row in cursor.fetchall()]
 
-                if 'embedding' not in columns:
+                if "embedding" not in columns:
                     logger.info("Adding embedding column to jobs table...")
                     cursor.execute("ALTER TABLE jobs ADD COLUMN embedding BLOB")
                     conn.commit()
@@ -564,10 +612,7 @@ class JobsDB:
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM jobs WHERE url = ?",
-                (url,)
-            )
+            cursor.execute("SELECT * FROM jobs WHERE url = ?", (url,))
             row = cursor.fetchone()
             return dict(row) if row else None
 
@@ -613,7 +658,7 @@ class JobsDB:
         employment_type: Optional[str] = None,
         department_id: Optional[int] = None,
         location_id: Optional[int] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get jobs filtered by various criteria.
@@ -668,7 +713,7 @@ class JobsDB:
         workplace_type: Optional[str] = None,
         experience_level: Optional[str] = None,
         department_id: Optional[int] = None,
-        location_id: Optional[int] = None
+        location_id: Optional[int] = None,
     ) -> int:
         """
         Count jobs with optional filters.
@@ -707,8 +752,7 @@ class JobsDB:
             cursor.execute(query, params)
             return cursor.fetchone()[0]
 
-
-    #I still dont know if we need this function
+    # I still dont know if we need this function
     def get_all_departments(self) -> List[Dict[str, Any]]:
         """
         Get all departments with their synonyms.
@@ -728,7 +772,6 @@ class JobsDB:
                 """
             )
             return [dict(row) for row in cursor.fetchall()]
-
 
     #!!!I still dont know if we need this function
     def get_all_locations(self) -> List[Dict[str, Any]]:
@@ -764,12 +807,12 @@ class JobsDB:
             - sample_job: A sample job record (if any exist)
         """
         result = {
-            'tables_exist': [],
-            'jobs_count': 0,
-            'departments_count': 0,
-            'locations_count': 0,
-            'sample_job': None,
-            'errors': []
+            "tables_exist": [],
+            "jobs_count": 0,
+            "departments_count": 0,
+            "locations_count": 0,
+            "sample_job": None,
+            "errors": [],
         }
 
         try:
@@ -779,44 +822,42 @@ class JobsDB:
 
             try:
                 # Get all tables
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-                )
-                result['tables_exist'] = [row[0] for row in cursor.fetchall()]
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                result["tables_exist"] = [row[0] for row in cursor.fetchall()]
 
                 # Count jobs
                 try:
                     cursor.execute("SELECT COUNT(*) FROM jobs")
-                    result['jobs_count'] = cursor.fetchone()[0]
+                    result["jobs_count"] = cursor.fetchone()[0]
                 except sqlite3.OperationalError as e:
-                    result['errors'].append(f"Error counting jobs: {e}")
+                    result["errors"].append(f"Error counting jobs: {e}")
 
                 # Count departments
                 try:
                     cursor.execute("SELECT COUNT(*) FROM departments")
-                    result['departments_count'] = cursor.fetchone()[0]
+                    result["departments_count"] = cursor.fetchone()[0]
                 except sqlite3.OperationalError as e:
-                    result['errors'].append(f"Error counting departments: {e}")
+                    result["errors"].append(f"Error counting departments: {e}")
 
                 # Count locations
                 try:
                     cursor.execute("SELECT COUNT(*) FROM locations")
-                    result['locations_count'] = cursor.fetchone()[0]
+                    result["locations_count"] = cursor.fetchone()[0]
                 except sqlite3.OperationalError as e:
-                    result['errors'].append(f"Error counting locations: {e}")
+                    result["errors"].append(f"Error counting locations: {e}")
 
                 # Get a sample job
                 try:
                     cursor.execute("SELECT * FROM jobs LIMIT 1")
                     row = cursor.fetchone()
                     if row:
-                        result['sample_job'] = dict(row)
+                        result["sample_job"] = dict(row)
                 except sqlite3.OperationalError as e:
-                    result['errors'].append(f"Error fetching sample job: {e}")
+                    result["errors"].append(f"Error fetching sample job: {e}")
             finally:
                 conn.close()
 
         except Exception as e:
-            result['errors'].append(f"Database connection error: {e}")
+            result["errors"].append(f"Database connection error: {e}")
 
         return result

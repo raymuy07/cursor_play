@@ -1,7 +1,15 @@
 import hashlib
-from typing import List, Dict
-from scripts.db_utils import JobsDB
+from types import CoroutineType
+from typing import Any
+from common.utils import setup_logging
+from scripts.db_utils import JobsDB , PendingEmbeddedDB
 import logging
+import asyncio
+from openai import OpenAI
+
+from functools import partial
+
+from scripts.message_queue import JOBS_QUEUE, RabbitMQConnection ,JobQueue
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +18,7 @@ class JobPersister:
     """Handles persistence of job batches to the database."""
 
     @staticmethod
-    def save_jobs_to_db(jobs: List[Dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
+    def save_jobs_to_db(jobs: list[dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
         """
         Save jobs to the jobs database using JobsDB.
         Automatically handles duplicate detection (via URL uniqueness).
@@ -59,7 +67,7 @@ class JobPersister:
         return hashlib.md5(url.encode('utf-8')).hexdigest()
 
     @staticmethod
-    def add_hash_to_jobs(jobs: List[Dict]) -> List[Dict]:
+    def add_hash_to_jobs(jobs: list[dict]) -> List[Dict]:
         """Add a hash field to each job based on its URL."""
         for job in jobs:
             job['url_hash'] = JobPersister.generate_url_hash(job.get('url', ''))
@@ -80,15 +88,10 @@ class JobFilter:
     """Handles filtering and validation of job batches."""
 
     @staticmethod
-    def is_hebrew_job(job: Dict) -> bool:
+    def is_hebrew_job(job: dict) -> bool:
         """
         Check if a job contains Hebrew text.
-
-        Args:
-            job: Job dictionary with title, description, location, etc.
-
-        Returns:
-            True if job appears to be in Hebrew, False otherwise
+        I dont want to support hebrew jobs. for now.
         """
         # Check multiple fields for Hebrew characters
         # Handle description which might be a dict
@@ -121,7 +124,7 @@ class JobFilter:
         return False
 
     @staticmethod
-    def is_in_israel_filter(job: Dict) -> bool:
+    def is_in_israel_filter(job: dict) -> bool:
         """Check if the job location contains 'ISRAEL'."""
         location = job.get('location', '')
         return "ISRAEL" in location
@@ -169,3 +172,51 @@ class JobFilter:
             valid_jobs.append(job)
 
         return valid_jobs, filter_counts
+
+
+
+async def filter_embedder_batch_call(job_queue:JobQueue,pending_embedded_db:PendingEmbeddedDB)
+
+
+    ##we will call the text embedder in a batch form
+
+
+
+
+    ##and here we want to persist the batch_id into the pending embedded db (which is not yet exist)
+
+
+
+async def filter_consumer():
+
+    rabbitmq = RabbitMQConnection()
+    logger.debug(f"Connecting to RabbitMQ at {rabbitmq.host}:{rabbitmq.port}")
+    await rabbitmq.connect()
+    logger.info("Connected to RabbitMQ successfully")
+
+    job_queue = JobQueue(rabbitmq)
+    pending_db_lib = PendingEmbeddedDB()
+
+    # Open persistent connection for the life of the worker
+    async with aiosqlite.connect(pending_db_lib.db_path) as db:
+        # Pass the open connection and the library instance via partial
+        callback = partial(filter_embedder_batch_call, job_queue=job_queue, pending_db_lib=pending_db_lib, db=db)
+
+        logger.info("Filter consumer worker started, waiting for raw jobs...")
+        await job_queue.consume(callback, prefetch=10)
+
+
+def persister():
+    pass
+
+if __name__ == "__main__":
+
+    setup_logging()
+
+    # Store reference to the task as recommended by asyncio docs
+    main_task = asyncio.create_task(filter_consumer())
+
+    try:
+        asyncio.get_event_loop().run_until_complete(main_task)
+    except KeyboardInterrupt:
+        logger.info("Filter consumer stopping...")

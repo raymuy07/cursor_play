@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def embed_jobs(jobs_db:JobsDB, embedder:TextEmbedder, prompt_version:str) -> tuple[int, int]:
     pass
 
-
+## this one is probably depracted?
 
 ## TODO Need to decide what will be the batch size at it can be cheaper with open ai . and the embedder should be taken from config.
 

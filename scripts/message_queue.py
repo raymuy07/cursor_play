@@ -71,7 +71,7 @@ class CompanyQueue(BaseQueue):
         )
         logger.debug(f"Queued company: {company.get('company_name')}")
 
-    async def consume(self, callback: Callable[[Dict], Any], prefetch: int = 10):
+    async def consume(self, callback: Callable[[dict], Any], prefetch: int = 10):
         """
         Consume companies from queue.
         Callback should be an async function.

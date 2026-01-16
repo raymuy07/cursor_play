@@ -9,12 +9,12 @@ import json
 import logging
 import time
 import sys
-from typing import Dict, List, Any, Optional
 from pathlib import Path
 from openai import OpenAI
 import os
+import pickle
 
-_LOGGER: Optional[logging.Logger] = None
+_LOGGER: logging.Logger | None = None
 
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class TextEmbedder:
         except Exception as e:
             raise RuntimeError(f"Error generating embedding: {str(e)}")
 
-    def save_embedding(self, embedding_data: Dict, output_path: str):
+    def save_embedding(self, embedding_data: dict, output_path: str):
         """
         Save embedding data to a pickle file.
         output_path: Path where to save the pickle file
@@ -82,7 +82,7 @@ class _MaxLevelFilter(logging.Filter):
         return record.levelno <= self._max_level
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, any]:
     """
     Load configuration from config.yaml
     """
@@ -133,7 +133,7 @@ def setup_logging():
         root_logger.addHandler(handler)
 
 
-def deduplicate_companies(companies: List[Dict]) -> List[Dict]:
+def deduplicate_companies(companies: list[dict]) -> list[dict]:
     """
     Remove duplicate companies based on job_page_url (the link)
     """
@@ -149,7 +149,7 @@ def deduplicate_companies(companies: List[Dict]) -> List[Dict]:
     return unique_companies
 
 
-def deduplicate_jobs(jobs: List[Dict]) -> List[Dict]:
+def deduplicate_jobs(jobs: list[dict]) -> list[dict]:
     """
     Remove duplicate jobs based on title and company
     """
@@ -175,7 +175,7 @@ def rate_limit_delay():
     time.sleep(delay)
 
 
-def save_json(data: List[Dict], filepath: str):
+def save_json(data: list[dict], filepath: str):
     """
     Save data to JSON file with proper formatting
     """
@@ -185,7 +185,7 @@ def save_json(data: List[Dict], filepath: str):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def load_json(filepath: str) -> List[Dict]:
+def load_json(filepath: str) -> list[dict]:
     """
     Load data from JSON file
     """
