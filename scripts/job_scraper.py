@@ -4,7 +4,6 @@ import os
 import sys
 import time
 import logging
-from typing import List, Dict, Optional
 from datetime import datetime
 from bs4 import BeautifulSoup
 import random
@@ -13,7 +12,6 @@ import httpx
 from functools import partial
 import asyncio
 import aio_pika
-
 
 
 from scripts.message_queue import RabbitMQConnection, CompanyQueue, JobQueue
