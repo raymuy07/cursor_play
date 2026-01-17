@@ -14,62 +14,8 @@ from openai import OpenAI
 import os
 import pickle
 
-_LOGGER: logging.Logger | None = None
-
 
 logger = logging.getLogger(__name__)
-
-class TextEmbedder:
-    """Shared base class for generating text embeddings"""
-
-    def __init__(self):
-        self.config = load_config()
-        self.model_name = self.config.get('embeddings', {}).get('model_name')
-        self.client = OpenAI(api_key=self.config.get('openai_api_key'))
-
-
-    def embed(self, text: str) -> dict:
-        """
-        Generate embedding for the given text.
-        """
-        if not text or not text.strip():
-            raise ValueError("Cannot generate embeddings for empty text")
-
-        try:
-            # Generate embedding (returns 1D numpy array)
-            embedding = self.client.embeddings.create(input=text, model=self.model_name).data[0].embedding
-
-            logger.debug(f"Embedding generated successfully. Dimension: {len(embedding)}")
-
-            return {
-            'embedding': embedding,
-            'model_name': self.model_name,
-        }
-
-        except Exception as e:
-            raise RuntimeError(f"Error generating embedding: {str(e)}")
-
-    def save_embedding(self, embedding_data: dict, output_path: str):
-        """
-        Save embedding data to a pickle file.
-        output_path: Path where to save the pickle file
-        """
-        try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            # Save to pickle file
-            with open(output_path, 'wb') as f:
-                pickle.dump(embedding_data, f)
-
-            logger.info(f"Embedding saved successfully to: {output_path}")
-
-            # Print summary
-            file_size = os.path.getsize(output_path) / 1024  # KB
-            logger.info(f"File size: {file_size:.2f} KB")
-
-        except Exception as e:
-            raise RuntimeError(f"Error saving embedding: {str(e)}")
 
 
 

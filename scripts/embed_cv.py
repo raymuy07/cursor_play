@@ -7,10 +7,10 @@ import os
 import re
 import logging
 from pathlib import Path
-from typing import Dict
 import yaml
 
-from common.utils import load_config, TextEmbedder
+from common.utils import load_config
+from common.txt_embedder import TextEmbedder
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)

@@ -113,7 +113,7 @@ class JobQueue(BaseQueue):
         )
         logger.info(f"Queued {len(jobs)} jobs from {source_url}")
 
-    async def consume(self, callback: Callable[[list, str], Any], prefetch: int = 1):
+    async def consume(self, callback: Callable[[dict], Any], prefetch: int = 1):
         """Consume job batches from queue."""
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
@@ -123,9 +123,9 @@ class JobQueue(BaseQueue):
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    data = json.loads(message.body.decode())
+                    jobs_data = json.loads(message.body.decode())
                     try:
-                        await callback(data["jobs"], data["source_url"])
+                        await callback(jobs_data)
                     except Exception as e:
                         logger.error(f"Error persisting jobs: {e}")
                         raise
