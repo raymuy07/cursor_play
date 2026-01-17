@@ -5,83 +5,13 @@ from common.utils import setup_logging
 from scripts.db_utils import JobsDB , PendingEmbeddedDB
 import logging
 import asyncio
-from openai import OpenAI
-
+from common.txt_embedder import TextEmbedder
+import aiosqlite
 from functools import partial
 
 from scripts.message_queue import JOBS_QUEUE, RabbitMQConnection ,JobQueue
 
 logger = logging.getLogger(__name__)
-
-
-class JobPersister:
-    """Handles persistence of job batches to the database."""
-
-    @staticmethod
-    def save_jobs_to_db(jobs: list[dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
-        """
-        Save jobs to the jobs database using JobsDB.
-        Automatically handles duplicate detection (via URL uniqueness).
-        Filters out invalid jobs using filter_valid_jobs().
-
-        Args:
-            jobs: List of job dictionaries to save
-            jobs_db: JobsDB instance for database operations
-
-        Returns:
-            Tuple of (success, jobs_inserted, jobs_skipped) where:
-            - success: True if save operation completed without critical errors
-            - jobs_inserted: Number of new jobs successfully inserted
-            - jobs_skipped: Number of jobs skipped (duplicates or errors)
-        """
-        inserted = 0
-        skipped = 0
-        errors = 0
-
-        # Filter out invalid jobs using external filtering function
-        valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
-        logger.info(f"Filter counts: {filter_counts}")
-        # Process only valid jobs
-        for job in valid_jobs:
-            try:
-                job_id = jobs_db.insert_job(job)
-                if job_id:
-                    inserted += 1
-                else:
-                    skipped += 1
-            except Exception as e:
-                logger.error(f"Unexpected error processing job with URL '{job.get('url')}': {e}", exc_info=True)
-                skipped += 1
-                errors += 1
-
-        # Success if we processed jobs without too many errors (allow some failures)
-        success = errors == 0 or (errors < len(valid_jobs) * 0.5)  # Fail if >50% errors
-
-        return success, inserted, skipped
-
-    @staticmethod
-    def generate_url_hash(url: str) -> str:
-        """Generate a hash from a URL for unique identification."""
-        if not url:
-            return ""
-        return hashlib.md5(url.encode('utf-8')).hexdigest()
-
-    @staticmethod
-    def add_hash_to_jobs(jobs: list[dict]) -> List[Dict]:
-        """Add a hash field to each job based on its URL."""
-        for job in jobs:
-            job['url_hash'] = JobPersister.generate_url_hash(job.get('url', ''))
-        return jobs
-
-    @staticmethod
-    def enrich_jobs_with_company(jobs: List[Dict], company: Dict) -> List[Dict]:
-        """Ensure jobs include company_name and source from the company record when missing."""
-        for job in jobs:
-            if not job.get('company_name'):
-                job['company_name'] = company.get('company_name')
-            if not job.get('source') and company.get('domain'):
-                job['source'] = company.get('domain')
-        return jobs
 
 
 class JobFilter:
@@ -130,7 +60,7 @@ class JobFilter:
         return "ISRAEL" in location
 
     @staticmethod
-    def filter_valid_jobs(jobs: List[Dict]) -> tuple[List[Dict], Dict[str, int]]:
+    def filter_valid_jobs(jobs: list[dict]) -> tuple[list[dict], dict[str, int]]:
         """
         Filter jobs based on validation criteria.
         Returns valid jobs and a breakdown of filtered counts.
@@ -175,10 +105,34 @@ class JobFilter:
 
 
 
-async def filter_embedder_batch_call(job_queue:JobQueue,pending_embedded_db:PendingEmbeddedDB)
+async def filter_embedder_batch_call(jobs_data:dict, job_queue:JobQueue, pending_embedded_db:PendingEmbeddedDB , db:aiosqlite.Connection):
+    """This function is called by the job queue consumer. it will filter the jobs and then embed them.
+    it gets the jobs_data dict as a batch of all the jobs that were scraped from a company."""
+
+    total_jobs_for_batch = []
+    jobs = jobs_data.get('jobs', [])
+    source_url = jobs_data.get('source_url', '')
+
+    embedder = TextEmbedder()
+    job_filter = JobFilter()
+
+    valid_jobs, filter_counts = job_filter.filter_valid_jobs(jobs)
+
+    if valid_jobs:
+        logger.info(f"Filtered {len(valid_jobs)} jobs from {source_url}")
+        #TODO add to the text embedder a batch call
+        total_jobs_for_batch.extend(valid_jobs)
+        if len(total_jobs_for_batch) >= 1000:
+            batch_id = await embedder.create_embedding_batch(total_jobs_for_batch)
+            await pending_embedded_db.insert_pending_batch_id(db, batch_id)
+
+            #!Question is who will check the db all the time for the completed?
 
 
-    ##we will call the text embedder in a batch form
+
+    else:
+        logger.warning(f"No valid jobs found from {source_url}")
+
 
 
 

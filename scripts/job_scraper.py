@@ -283,7 +283,7 @@ async def fetch_html_from_url(url: str, client: httpx.AsyncClient) -> Optional[s
 
 
 
-async def process_company(company: Dict, job_queue:JobQueue, client: httpx.AsyncClient):
+async def process_company(company: dict, job_queue:JobQueue, client: httpx.AsyncClient):
     """this function lives inside a queue consumer and is in charge of scraping a company and publishing the jobs to the jobs queue"""
 
     company_name = company.get('company_name', 'Unknown')
