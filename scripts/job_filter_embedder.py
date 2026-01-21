@@ -125,16 +125,11 @@ async def filter_embedder_batch_call(jobs_data:dict, job_queue:JobQueue, pending
         if len(total_jobs_for_batch) >= 1000:
             batch_id = await embedder.create_embedding_batch(total_jobs_for_batch)
             await pending_embedded_db.insert_pending_batch_id(db, batch_id)
-
-            #!Question is who will check the db all the time for the completed?
-
-
-
+            total_jobs_for_batch = []
+            #!Question is who will check the db all the time for the completed? i think the scheduler
+            ## the persister will not work as a pure consumer
     else:
         logger.warning(f"No valid jobs found from {source_url}")
-
-
-
 
 
     ##and here we want to persist the batch_id into the pending embedded db (which is not yet exist)
