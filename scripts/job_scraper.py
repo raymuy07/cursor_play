@@ -284,7 +284,7 @@ async def process_company(company: dict, job_queue: JobQueue, client: httpx.Asyn
     """this function lives inside a queue consumer and is in charge of scraping a company and publishing the jobs to the jobs queue"""
 
     company_name = company.get("company_name", "Unknown")
-    url = company.get("job_page_url")
+    url = company.get("company_page_url")
     logger.debug(f"Processing company: {company_name} | URL: {url}")
 
     html = await fetch_html_from_url(url, client=client)

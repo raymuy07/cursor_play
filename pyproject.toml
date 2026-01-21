@@ -20,6 +20,7 @@ dependencies = [
     "python-docx",
     "numpy",
     "aio-pika",
+    "aiosqlite",
     "httpx",
     "PyYAML",
 ]

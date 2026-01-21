@@ -18,7 +18,6 @@ from scripts.message_queue import (
     RabbitMQConnection,
 )
 
-
 # -----------------------------------------------------------------------------
 # Unit Tests (mocked, no real RabbitMQ required)
 # -----------------------------------------------------------------------------
@@ -108,7 +107,7 @@ class TestCompanyQueue:
         company = {
             "company_name": "Test Corp",
             "domain": "lever",
-            "job_page_url": "https://jobs.lever.co/testcorp",
+            "company_page_url": "https://jobs.lever.co/testcorp",
         }
 
         with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
@@ -293,7 +292,7 @@ class TestMessageQueueIntegration:
         test_company = {
             "company_name": "Integration Test Corp",
             "domain": "comeet",
-            "job_page_url": "https://jobs.comeet.co/integration-test",
+            "company_page_url": "https://jobs.comeet.co/integration-test",
         }
 
         # Publish
@@ -308,10 +307,7 @@ class TestMessageQueueIntegration:
             raise asyncio.CancelledError()  # Break out of consume loop
 
         try:
-            await asyncio.wait_for(
-                company_queue.consume(capture_company, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(company_queue.consume(capture_company, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
@@ -343,10 +339,7 @@ class TestMessageQueueIntegration:
             raise asyncio.CancelledError()
 
         try:
-            await asyncio.wait_for(
-                job_queue.consume(capture_jobs, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(job_queue.consume(capture_jobs, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 

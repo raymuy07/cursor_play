@@ -4,20 +4,19 @@ Database Initialization Script
 Creates and initializes both search_queries.db and companies_pages.db
 """
 
-import os
 import logging
 
 logger = logging.getLogger(__name__)
 
-from scripts.db_schema import get_search_queries_schema, get_companies_schema, get_jobs_schema
+from scripts.db_schema import get_companies_schema, get_jobs_schema, get_search_queries_schema
 from scripts.db_utils import (
-    initialize_database,
-    SEARCH_QUERIES_DB,
     COMPANIES_DB,
     JOBS_DB,
-    SearchQueriesDB,
+    SEARCH_QUERIES_DB,
     CompaniesDB,
-    JobsDB
+    JobsDB,
+    SearchQueriesDB,
+    initialize_database,
 )
 
 
@@ -57,11 +56,11 @@ def init_companies_db():
 
     # Try inserting a test company
     test_company = {
-        'company_name': 'Test Company',
-        'domain': 'comeet',
-        'job_page_url': 'https://www.comeet.com/jobs/testcompany/TEST.001',
-        'title': 'Jobs at Test Company - Comeet',
-        'source': 'google_serper'
+        "company_name": "Test Company",
+        "domain": "comeet",
+        "company_page_url": "https://www.comeet.com/jobs/testcompany/TEST.001",
+        "title": "Jobs at Test Company - Comeet",
+        "source": "google_serper",
     }
 
     test_id = db.insert_company(test_company)
@@ -74,7 +73,7 @@ def init_companies_db():
             logger.info("  - Duplicate prevention working correctly")
 
         # Retrieve the company
-        company = db.get_company_by_url(test_company['job_page_url'])
+        company = db.get_company_by_url(test_company["company_page_url"])
         logger.info(f"  - Test company retrieved: {company['company_name'] if company else 'None'}")
     else:
         logger.warning("  - Test company insertion failed (may already exist)")
@@ -104,16 +103,16 @@ def init_jobs_db():
 
     # Try inserting a test job
     test_job = {
-        'title': 'Test Software Engineer',
-        'company_name': 'Test Company',
-        'department': 'Engineering',
-        'location': 'Tel Aviv',
-        'workplace_type': 'Hybrid',
-        'experience_level': 'Senior',
-        'employment_type': 'Full-time',
-        'description': 'This is a test job posting',
-        'url': 'https://example.com/jobs/test-123',
-        'uid': 'TEST-123'
+        "title": "Test Software Engineer",
+        "company_name": "Test Company",
+        "department": "Engineering",
+        "location": "Tel Aviv",
+        "workplace_type": "Hybrid",
+        "experience_level": "Senior",
+        "employment_type": "Full-time",
+        "description": "This is a test job posting",
+        "url": "https://example.com/jobs/test-123",
+        "uid": "TEST-123",
     }
 
     test_id = db.insert_job(test_job)
@@ -126,7 +125,7 @@ def init_jobs_db():
             logger.info("  - Duplicate prevention working correctly")
 
         # Retrieve the job
-        job = db.get_job_by_url(test_job['url'])
+        job = db.get_job_by_url(test_job["url"])
         logger.info(f"  - Test job retrieved: {job['title'] if job else 'None'}")
         logger.info(f"  - Department normalized to ID: {job['department_id'] if job else 'None'}")
         logger.info(f"  - Location normalized to ID: {job['location_id'] if job else 'None'}")
@@ -178,7 +177,7 @@ def main():
     print("=" * 60)
     print("[OK] All databases initialized successfully!")
     print("=" * 60)
-    print(f"\nDatabase locations:")
+    print("\nDatabase locations:")
     print(f"  - {SEARCH_QUERIES_DB}")
     print(f"  - {COMPANIES_DB}")
     print(f"  - {JOBS_DB}")
