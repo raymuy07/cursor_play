@@ -1,15 +1,13 @@
-import hashlib
-from types import CoroutineType
-from typing import Any
-from common.utils import setup_logging
-from scripts.db_utils import JobsDB , PendingEmbeddedDB
-import logging
 import asyncio
-from common.txt_embedder import TextEmbedder
-import aiosqlite
+import logging
 from functools import partial
 
-from scripts.message_queue import JOBS_QUEUE, RabbitMQConnection ,JobQueue
+import aiosqlite
+
+from common.txt_embedder import TextEmbedder
+from common.utils import setup_logging
+from scripts.db_utils import PendingEmbeddedDB
+from scripts.message_queue import JobQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
 
@@ -25,25 +23,20 @@ class JobFilter:
         """
         # Check multiple fields for Hebrew characters
         # Handle description which might be a dict
-        description = job.get('description', '')
+        description = job.get("description", "")
         if isinstance(description, dict):
-            description = ' '.join(str(v) for v in description.values() if v)
+            description = " ".join(str(v) for v in description.values() if v)
 
-        fields_to_check = [
-            job.get('title', ''),
-            description,
-            job.get('location', ''),
-            job.get('company_name', '')
-        ]
+        fields_to_check = [job.get("title", ""), description, job.get("location", ""), job.get("company_name", "")]
 
         # Combine all text fields
-        combined_text = ' '.join(str(field) for field in fields_to_check if field)
+        combined_text = " ".join(str(field) for field in fields_to_check if field)
 
         if not combined_text:
             return False
 
         # Count Hebrew characters
-        hebrew_chars = sum(1 for c in combined_text if '\u0590' <= c <= '\u05FF')
+        hebrew_chars = sum(1 for c in combined_text if "\u0590" <= c <= "\u05ff")
         total_alpha_chars = sum(1 for c in combined_text if c.isalpha())
 
         # If more than 10% of alphabetic characters are Hebrew, consider it a Hebrew job
@@ -56,7 +49,7 @@ class JobFilter:
     @staticmethod
     def is_in_israel_filter(job: dict) -> bool:
         """Check if the job location contains 'ISRAEL'."""
-        location = job.get('location', '')
+        location = job.get("location", "")
         return "ISRAEL" in location
 
     @staticmethod
@@ -72,29 +65,24 @@ class JobFilter:
                         e.g., {'hebrew': 5, 'general_department': 2}
         """
         valid_jobs = []
-        filter_counts = {
-            'hebrew': 0,
-            'general_department': 0,
-            'job_not_in_israel': 0
-        }
+        filter_counts = {"hebrew": 0, "general_department": 0, "job_not_in_israel": 0}
 
         for job in jobs:
-
             # Filter: Jobs not in Israel
             if not JobFilter.is_in_israel_filter(job):
-                filter_counts['job_not_in_israel'] += 1
+                filter_counts["job_not_in_israel"] += 1
                 continue
 
             # Filter: Hebrew jobs
             if JobFilter.is_hebrew_job(job):
-                filter_counts['hebrew'] += 1
+                filter_counts["hebrew"] += 1
                 continue
 
             # Filter: General department jobs
             try:
-                department = str(job.get('department')).strip().lower()
-                if department == 'general':
-                    filter_counts['general_department'] += 1
+                department = str(job.get("department")).strip().lower()
+                if department == "general":
+                    filter_counts["general_department"] += 1
                     continue
             except AttributeError:
                 pass
@@ -104,14 +92,13 @@ class JobFilter:
         return valid_jobs, filter_counts
 
 
-
-async def filter_embedder_batch_call(jobs_data:dict, job_queue:JobQueue, pending_embedded_db:PendingEmbeddedDB , db:aiosqlite.Connection):
+async def filter_embedder_batch_call(jobs_data: dict, pending_embedded_db: PendingEmbeddedDB, db: aiosqlite.Connection):
     """This function is called by the job queue consumer. it will filter the jobs and then embed them.
     it gets the jobs_data dict as a batch of all the jobs that were scraped from a company."""
 
     total_jobs_for_batch = []
-    jobs = jobs_data.get('jobs', [])
-    source_url = jobs_data.get('source_url', '')
+    jobs = jobs_data.get("jobs", [])
+    source_url = jobs_data.get("source_url", "")
 
     embedder = TextEmbedder()
     job_filter = JobFilter()
@@ -120,9 +107,9 @@ async def filter_embedder_batch_call(jobs_data:dict, job_queue:JobQueue, pending
 
     if valid_jobs:
         logger.info(f"Filtered {len(valid_jobs)} jobs from {source_url}")
-        #TODO add to the text embedder a batch call
+        # TODO add to the text embedder a batch call
         total_jobs_for_batch.extend(valid_jobs)
-        if len(total_jobs_for_batch) >= 1000:
+        if len(total_jobs_for_batch) >= 500:
             batch_id = await embedder.create_embedding_batch(total_jobs_for_batch)
             await pending_embedded_db.insert_pending_batch_id(db, batch_id)
             total_jobs_for_batch = []
@@ -131,13 +118,10 @@ async def filter_embedder_batch_call(jobs_data:dict, job_queue:JobQueue, pending
     else:
         logger.warning(f"No valid jobs found from {source_url}")
 
-
     ##and here we want to persist the batch_id into the pending embedded db (which is not yet exist)
 
 
-
 async def filter_consumer():
-
     rabbitmq = RabbitMQConnection()
     logger.debug(f"Connecting to RabbitMQ at {rabbitmq.host}:{rabbitmq.port}")
     await rabbitmq.connect()
@@ -149,7 +133,7 @@ async def filter_consumer():
     # Open persistent connection for the life of the worker
     async with aiosqlite.connect(pending_db_lib.db_path) as db:
         # Pass the open connection and the library instance via partial
-        callback = partial(filter_embedder_batch_call, job_queue=job_queue, pending_db_lib=pending_db_lib, db=db)
+        callback = partial(filter_embedder_batch_call, pending_db_lib=pending_db_lib, db=db)
 
         logger.info("Filter consumer worker started, waiting for raw jobs...")
         await job_queue.consume(callback, prefetch=10)
@@ -158,8 +142,8 @@ async def filter_consumer():
 def persister():
     pass
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     setup_logging()
 
     # Store reference to the task as recommended by asyncio docs

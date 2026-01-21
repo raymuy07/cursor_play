@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Real companies to test against (known working Comeet pages)
 TEST_COMPANIES = [
-    {"company_name": "Flare", "domain": "comeet.com", "job_page_url": "https://www.comeet.com/jobs/flare/36.00F"},
+    {"company_name": "Flare", "domain": "comeet.com", "company_page_url": "https://www.comeet.com/jobs/flare/36.00F"},
     # Add more as backup in case one goes offline
 ]
 
@@ -50,9 +51,9 @@ class TestPipelineIntegration:
         """Test that we can scrape a real company page and extract jobs."""
         company = TEST_COMPANIES[0]
 
-        html = await fetch_html_from_url(company["job_page_url"], http_client)
+        html = await fetch_html_from_url(company["company_page_url"], http_client)
 
-        assert html is not None, f"Failed to fetch HTML from {company['job_page_url']}"
+        assert html is not None, f"Failed to fetch HTML from {company['company_page_url']}"
         assert len(html) > 1000, "HTML content seems too short"
 
         scraper = JobScraper(html)
@@ -72,7 +73,7 @@ class TestPipelineIntegration:
         """Test that JobFilter correctly filters jobs."""
         company = TEST_COMPANIES[0]
 
-        html = await fetch_html_from_url(company["job_page_url"], http_client)
+        html = await fetch_html_from_url(company["company_page_url"], http_client)
         scraper = JobScraper(html)
         jobs = scraper.extract_jobs()
 
@@ -92,12 +93,20 @@ class TestPipelineIntegration:
 
         print(f"✅ Filtered: {len(valid_jobs)} valid, {filter_counts}")
 
-    async def test_full_pipeline_company_to_queue_to_filter(self, rabbitmq, http_client):
+    async def test_full_pipeline_company_to_queue_to_persister(self, rabbitmq, http_client):
         """
-        Full E2E test: Publish company → Scrape → Publish jobs → Consume & Filter
+        Full E2E test: Company → Scrape → Filter → Embed (mocked) → Persist (placeholder)
 
-        This tests the actual queue message flow between components.
+        Pipeline flow:
+        1. CompanyManager publishes company to companies_queue
+        2. JobScraper consumes, scrapes HTML, publishes jobs to jobs_queue
+        3. FilterEmbedder consumes, filters jobs, calls TextEmbedder (MOCKED)
+        4. Persister saves to DB (PLACEHOLDER)
+
+        RabbitMQ is REAL, OpenAI API is MOCKED.
         """
+        from common.txt_embedder import TextEmbedder
+
         metrics = {
             "timings": {},
             "counts": {},
@@ -109,15 +118,17 @@ class TestPipelineIntegration:
 
         test_company = TEST_COMPANIES[0]
 
-        # Step 1: Simulate CompanyManager publishing a company
+        # ========================================
+        # Step 1: CompanyManager publishes company
+        # ========================================
         step_start = time.perf_counter()
         await company_queue.publish(test_company)
-        metrics["timings"]["publish_company"] = time.perf_counter() - step_start
-        logger.info(
-            f"📤 Published company: {test_company['company_name']} ({metrics['timings']['publish_company']:.3f}s)"
-        )
+        metrics["timings"]["1_publish_company"] = time.perf_counter() - step_start
+        logger.info(f"📤 [Step 1] Published company: {test_company['company_name']}")
 
-        # Step 2: Simulate JobScraper consuming and processing
+        # ========================================
+        # Step 2: JobScraper consumes and scrapes
+        # ========================================
         scraped_jobs = []
         html_size = 0
 
@@ -125,24 +136,23 @@ class TestPipelineIntegration:
             nonlocal html_size
             """Simulates job_scraper.process_company"""
             fetch_start = time.perf_counter()
-            html = await fetch_html_from_url(company["job_page_url"], http_client)
-            metrics["timings"]["fetch_html"] = time.perf_counter() - fetch_start
+            html = await fetch_html_from_url(company["company_page_url"], http_client)
+            metrics["timings"]["2_fetch_html"] = time.perf_counter() - fetch_start
 
             if html:
                 html_size = len(html)
                 parse_start = time.perf_counter()
                 scraper = JobScraper(html)
                 jobs = scraper.extract_jobs()
-                metrics["timings"]["parse_jobs"] = time.perf_counter() - parse_start
+                metrics["timings"]["2_parse_jobs"] = time.perf_counter() - parse_start
 
                 if jobs:
                     scraped_jobs.extend(jobs)
-                    # Publish to job queue (like the real scraper does)
                     publish_start = time.perf_counter()
-                    await job_queue.publish_batch(jobs, company["job_page_url"])
-                    metrics["timings"]["publish_jobs"] = time.perf_counter() - publish_start
-                    logger.info(f"📤 Published {len(jobs)} jobs to job queue")
-            raise asyncio.CancelledError()  # Exit after one message
+                    await job_queue.publish_batch(jobs, company["company_page_url"])
+                    metrics["timings"]["2_publish_jobs"] = time.perf_counter() - publish_start
+                    logger.info(f"📤 [Step 2] Scraped {len(jobs)} jobs, published to jobs_queue")
+            raise asyncio.CancelledError()
 
         with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
             await asyncio.wait_for(company_queue.consume(scraper_callback, prefetch=1), timeout=30.0)
@@ -151,28 +161,83 @@ class TestPipelineIntegration:
         metrics["counts"]["scraped_jobs"] = len(scraped_jobs)
         metrics["counts"]["html_size_kb"] = html_size / 1024
 
-        # Step 3: Simulate FilterEmbedder consuming job batches
-        filtered_results = {"valid": [], "counts": {}}
+        # ========================================
+        # Step 3: FilterEmbedder consumes, filters, and embeds (MOCKED)
+        # ========================================
+        filtered_results = {"valid": [], "counts": {}, "batch_id": None}
 
-        async def filter_callback(jobs_data: dict):
-            """Simulates job_filter_embedder.filter_embedder_batch_call"""
-            jobs = jobs_data.get("jobs", [])
-            source = jobs_data.get("source_url", "")
+        # Create embedder and mock the OpenAI API calls
+        embedder = TextEmbedder()
 
-            filter_start = time.perf_counter()
-            valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
-            metrics["timings"]["filter_jobs"] = time.perf_counter() - filter_start
+        with (
+            patch.object(embedder.client.files, "create", new_callable=AsyncMock) as mock_file_create,
+            patch.object(embedder.client.batches, "create", new_callable=AsyncMock) as mock_batch_create,
+        ):
+            mock_file_create.return_value = MagicMock(id="file-test123")
+            mock_batch_create.return_value = MagicMock(id="batch-test456")
 
-            filtered_results["valid"] = valid_jobs
-            filtered_results["counts"] = filter_counts
+            async def filter_embed_callback(jobs_data: dict):
+                """Simulates job_filter_embedder.filter_embedder_batch_call with mocked embedder"""
+                jobs = jobs_data.get("jobs", [])
+                source = jobs_data.get("source_url", "")
 
-            logger.info(f"✅ Filtered batch from {source}: {len(valid_jobs)} valid")
-            raise asyncio.CancelledError()
+                # Filter jobs
+                filter_start = time.perf_counter()
+                valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
+                metrics["timings"]["3_filter_jobs"] = time.perf_counter() - filter_start
 
-        with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
-            await asyncio.wait_for(job_queue.consume(filter_callback, prefetch=1), timeout=10.0)
+                filtered_results["valid"] = valid_jobs
+                filtered_results["counts"] = filter_counts
 
+                logger.info(f"✅ [Step 3] Filtered: {len(valid_jobs)} valid from {source}")
+
+                # Embed valid jobs (API is mocked - $0 cost)
+                if valid_jobs:
+                    # Prepare job descriptions for embedding
+                    job_texts = []
+                    for job in valid_jobs:
+                        desc = job.get("description", {})
+                        if isinstance(desc, dict):
+                            desc = " ".join(str(v) for v in desc.values() if v)
+                        job_texts.append(f"{job.get('title', '')} - {desc[:500]}")
+
+                    embed_start = time.perf_counter()
+                    batch_id = await embedder.create_embedding_batch(job_texts)
+                    metrics["timings"]["3_create_embedding_batch"] = time.perf_counter() - embed_start
+                    filtered_results["batch_id"] = batch_id
+                    logger.info(f"📤 [Step 3] Created embedding batch: {batch_id} (MOCKED)")
+
+                raise asyncio.CancelledError()
+
+            with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
+                await asyncio.wait_for(job_queue.consume(filter_embed_callback, prefetch=1), timeout=10.0)
+
+            # Verify embedder was called correctly
+            if filtered_results["valid"]:
+                mock_file_create.assert_called_once()
+                mock_batch_create.assert_called_once()
+                assert filtered_results["batch_id"] == "batch-test456"
+
+        # ========================================
+        # Step 4: Persister (PLACEHOLDER)
+        # ========================================
+        # TODO: Implement when JobPersister is ready
+        # This would:
+        # 1. Poll for batch completion (or mock immediate completion)
+        # 2. Retrieve embeddings from batch results
+        # 3. Save jobs + embeddings to jobs.db
+        persister_start = time.perf_counter()
+        jobs_to_persist = filtered_results["valid"]
+        batch_id = filtered_results["batch_id"]
+
+        # Placeholder: In real implementation, this would call JobPersister
+        logger.info(f"📥 [Step 4] PLACEHOLDER: Would persist {len(jobs_to_persist)} jobs with batch_id={batch_id}")
+        metrics["timings"]["4_persist_placeholder"] = time.perf_counter() - persister_start
+        metrics["counts"]["jobs_to_persist"] = len(jobs_to_persist)
+
+        # ========================================
         # Verify end-to-end success
+        # ========================================
         total_processed = len(filtered_results["valid"]) + sum(filtered_results["counts"].values())
         assert total_processed == len(scraped_jobs), "All scraped jobs should be processed by filter"
 
@@ -181,22 +246,29 @@ class TestPipelineIntegration:
         metrics["counts"]["filter_breakdown"] = filtered_results["counts"]
 
         # Print detailed metrics report
-        print("\n" + "=" * 60)
-        print("🎉 PIPELINE TEST METRICS")
-        print("=" * 60)
+        print("\n" + "=" * 70)
+        print("🎉 FULL PIPELINE TEST METRICS")
+        print("=" * 70)
         print(f"Company: {test_company['company_name']}")
-        print(f"URL: {test_company['job_page_url']}")
-        print("-" * 60)
+        print(f"URL: {test_company['company_page_url']}")
+        print("-" * 70)
         print("⏱️  TIMING BREAKDOWN:")
-        for step, duration in metrics["timings"].items():
-            print(f"   {step:.<30} {duration:.3f}s")
-        print("-" * 60)
+        for step, duration in sorted(metrics["timings"].items()):
+            print(f"   {step:.<40} {duration:.3f}s")
+        print("-" * 70)
         print("📊 COUNTS:")
-        print(f"   HTML size:................ {metrics['counts']['html_size_kb']:.1f} KB")
-        print(f"   Jobs scraped:............. {metrics['counts']['scraped_jobs']}")
-        print(f"   Jobs valid after filter:.. {metrics['counts']['valid_jobs']}")
-        print(f"   Filter breakdown:......... {metrics['counts']['filter_breakdown']}")
-        print("=" * 60 + "\n")
+        print(f"   HTML size:........................ {metrics['counts']['html_size_kb']:.1f} KB")
+        print(f"   Jobs scraped:..................... {metrics['counts']['scraped_jobs']}")
+        print(f"   Jobs valid after filter:.......... {metrics['counts']['valid_jobs']}")
+        print(f"   Jobs to persist:.................. {metrics['counts']['jobs_to_persist']}")
+        print(f"   Filter breakdown:................. {metrics['counts']['filter_breakdown']}")
+        print("-" * 70)
+        print("🔌 INTEGRATIONS:")
+        print("   RabbitMQ:......................... ✅ REAL")
+        print("   HTTP Scraping:.................... ✅ REAL")
+        print(f"   OpenAI Embeddings:................ 🔸 MOCKED (batch_id={filtered_results['batch_id']})")
+        print("   Database Persist:................. ⏳ PLACEHOLDER")
+        print("=" * 70 + "\n")
 
 
 @pytest.mark.integration
@@ -212,3 +284,57 @@ async def test_rabbitmq_connection():
         print("✅ RabbitMQ connection successful")
     finally:
         await rabbitmq.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_embedder_api_request_structure():
+    """
+    Test that TextEmbedder builds correct API requests WITHOUT calling OpenAI.
+
+    This validates the entire code path through the embedder:
+    - JSONL file creation
+    - File upload to OpenAI
+    - Batch job creation
+
+    All OpenAI API calls are mocked, so this costs $0.
+    """
+    from common.txt_embedder import TextEmbedder
+
+    embedder = TextEmbedder()
+
+    test_texts = [
+        "Software Engineer at TechCorp - Building scalable systems",
+        "Product Manager role - Leading cross-functional teams",
+        "Data Scientist position - Machine learning expertise required",
+    ]
+
+    # Mock the OpenAI client methods
+    with (
+        patch.object(embedder.client.files, "create", new_callable=AsyncMock) as mock_file_create,
+        patch.object(embedder.client.batches, "create", new_callable=AsyncMock) as mock_batch_create,
+    ):
+        # Setup mock returns
+        mock_file_create.return_value = MagicMock(id="file-abc123")
+        mock_batch_create.return_value = MagicMock(id="batch-xyz789")
+
+        # This will build the JSONL and call the mocked API
+        batch_id = await embedder.create_embedding_batch(test_texts)
+
+        # Verify batch ID returned correctly
+        assert batch_id == "batch-xyz789"
+
+        # Verify file upload was called
+        mock_file_create.assert_called_once()
+        call_kwargs = mock_file_create.call_args.kwargs
+        assert call_kwargs["purpose"] == "batch"
+
+        # Verify batch creation was called with correct parameters
+        mock_batch_create.assert_called_once_with(
+            input_file_id="file-abc123", endpoint="/v1/embeddings", completion_window="24h"
+        )
+
+        print("✅ TextEmbedder API request structure verified")
+        print(f"   Texts submitted: {len(test_texts)}")
+        print(f"   Mock batch ID: {batch_id}")
+        print("   No actual API calls made - $0 cost")

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_name TEXT NOT NULL,
     domain TEXT NOT NULL,  -- 'comeet', 'lever', 'greenhouse', etc.
-    job_page_url TEXT UNIQUE NOT NULL,  -- The main job listings page for this company
+    company_page_url TEXT UNIQUE NOT NULL,  -- The main job listings page for this company
     title TEXT,  -- Page title from search results
     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_scraped TIMESTAMP,  -- When we last scraped jobs from this page
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS companies (
 
 CREATE INDEX IF NOT EXISTS idx_company_name ON companies(company_name);
 CREATE INDEX IF NOT EXISTS idx_domain ON companies(domain);
-CREATE INDEX IF NOT EXISTS idx_job_page_url ON companies(job_page_url);
+CREATE INDEX IF NOT EXISTS idx_company_page_url ON companies(company_page_url);
 CREATE INDEX IF NOT EXISTS idx_is_active ON companies(is_active);
 CREATE INDEX IF NOT EXISTS idx_last_scraped ON companies(last_scraped);
 CREATE INDEX IF NOT EXISTS idx_discovered_at ON companies(discovered_at);
@@ -57,10 +57,7 @@ def get_companies_schema():
 def get_jobs_schema():
     """Return the SQL schema for jobs.db from the schema file"""
     import os
-    schema_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        'db', 'schema', 'jobs_schema.sql'
-    )
-    with open(schema_path, 'r', encoding='utf-8') as f:
-        return f.read()
 
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "db", "schema", "jobs_schema.sql")
+    with open(schema_path, encoding="utf-8") as f:
+        return f.read()

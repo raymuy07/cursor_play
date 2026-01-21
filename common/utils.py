@@ -4,19 +4,16 @@ Utility Functions
 Common helper functions used across scripts
 """
 
-import yaml
 import json
 import logging
-import time
-import sys
-from pathlib import Path
-from openai import OpenAI
 import os
-import pickle
+import sys
+import time
+from pathlib import Path
 
+import yaml
 
 logger = logging.getLogger(__name__)
-
 
 
 class _MaxLevelFilter(logging.Filter):
@@ -32,27 +29,27 @@ def load_config() -> dict[str, any]:
     """
     Load configuration from config.yaml
     """
-    config_path = Path('config.yaml')
+    config_path = Path("config.yaml")
     if not config_path.exists():
         raise FileNotFoundError("config.yaml not found")
 
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     # Load environment variables for sensitive data
-    import os
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # Replace placeholders with environment variables
-    if 'openai_api_key' in config:
-        config['openai_api_key'] = os.getenv('OPENAI_API_KEY', config['openai_api_key'])
-    if 'telegram_bot_token' in config:
-        config['telegram_bot_token'] = os.getenv('TELEGRAM_BOT_TOKEN', config['telegram_bot_token'])
-    if 'telegram_chat_id' in config:
-        config['telegram_chat_id'] = os.getenv('TELEGRAM_CHAT_ID', config['telegram_chat_id'])
-    if 'serper_api_key' in config:
-        config['serper_api_key'] = os.getenv('SERPER_API_KEY', config['serper_api_key'])
+    if "openai_api_key" in config:
+        config["openai_api_key"] = os.getenv("OPENAI_API_KEY", config["openai_api_key"])
+    if "telegram_bot_token" in config:
+        config["telegram_bot_token"] = os.getenv("TELEGRAM_BOT_TOKEN", config["telegram_bot_token"])
+    if "telegram_chat_id" in config:
+        config["telegram_chat_id"] = os.getenv("TELEGRAM_CHAT_ID", config["telegram_chat_id"])
+    if "serper_api_key" in config:
+        config["serper_api_key"] = os.getenv("SERPER_API_KEY", config["serper_api_key"])
 
     return config
 
@@ -62,18 +59,16 @@ def setup_logging():
     log_config = {}
     try:
         config = load_config()
-        log_config = config.get('logging', {})
+        log_config = config.get("logging", {})
     except Exception:
         pass
 
     root_logger = logging.getLogger()  # ROOT logger
-    root_logger.setLevel(getattr(logging, log_config.get('level', 'INFO')))
+    root_logger.setLevel(getattr(logging, log_config.get("level", "INFO")))
 
     ## !TODO,I defiently need to change looging structure into json.
     if not root_logger.handlers:
-        formatter = logging.Formatter(
-            log_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        )
+        formatter = logging.Formatter(log_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(formatter)
         root_logger.addHandler(handler)
@@ -81,13 +76,13 @@ def setup_logging():
 
 def deduplicate_companies(companies: list[dict]) -> list[dict]:
     """
-    Remove duplicate companies based on job_page_url (the link)
+    Remove duplicate companies based on company_page_url (the link)
     """
     seen_urls = set()
     unique_companies = []
 
     for company in companies:
-        job_url = company.get('job_page_url')
+        job_url = company.get("company_page_url")
         if job_url and job_url not in seen_urls:
             seen_urls.add(job_url)
             unique_companies.append(company)
@@ -117,7 +112,7 @@ def rate_limit_delay():
     Apply rate limiting delay
     """
     config = load_config()
-    delay = config.get('scraping', {}).get('rate_limit_delay', 2)
+    delay = config.get("scraping", {}).get("rate_limit_delay", 2)
     time.sleep(delay)
 
 
@@ -127,7 +122,7 @@ def save_json(data: list[dict], filepath: str):
     """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-    with open(filepath, 'w', encoding='utf-8') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -138,5 +133,5 @@ def load_json(filepath: str) -> list[dict]:
     if not Path(filepath).exists():
         return []
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding="utf-8") as f:
         return json.load(f)
