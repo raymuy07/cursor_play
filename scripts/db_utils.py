@@ -4,6 +4,8 @@ Database Utilities
 Provides connection management and common operations for SQLite databases
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -144,26 +146,19 @@ class PendingEmbeddedDB:
             logger.error(f"Error updating batch {batch_id}: {e}")
             return False
 
+
 class CompaniesDB:
     """Interface for companies.db operations"""
 
     def __init__(self):
         self.db_path = COMPANIES_DB
 
-    def insert_company(self, company_data: Dict[str, Any]) -> Optional[int]:
-        """
-        Insert a new company into the database.
-        Handles duplicate prevention via job_page_url uniqueness.
-        """
+    def insert_company(self, company_data: dict) -> int | None:
         try:
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
-
                 cursor.execute(
-                    """
-                    INSERT INTO companies (company_name, domain, job_page_url, title, source)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
+                    "INSERT INTO companies (company_name, domain, job_page_url, title, source) VALUES (?, ?, ?, ?, ?)",
                     (
                         company_data.get("company_name"),
                         company_data.get("domain"),
@@ -224,7 +219,7 @@ class CompaniesDB:
             )
             return cursor.rowcount > 0
 
-    def get_company_by_url(self, job_page_url: str) -> Optional[Dict[str, Any]]:
+    def get_company_by_url(self, job_page_url: str) -> dict | None:
         """
         Get a company by its job page URL
         """
@@ -234,7 +229,7 @@ class CompaniesDB:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def get_companies_by_domain(self, domain: str, active_only: bool = True) -> List[Dict[str, Any]]:
+    def get_companies_by_domain(self, domain: str, active_only: bool = True) -> list[dict]:
         """
         Get all companies for a specific domain.
 
@@ -259,7 +254,7 @@ class CompaniesDB:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_stale_companies(self, max_age_hours: int) -> List[Dict[str, Any]]:
+    def get_stale_companies(self, max_age_hours: int) -> list[dict]:
         """Get companies not scraped within max_age_hours."""
 
         with get_db_connection(self.db_path) as conn:
@@ -275,7 +270,7 @@ class CompaniesDB:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_all_companies(self, active_only: bool = True, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_all_companies(self, active_only: bool = True, limit: int | None = None) -> list[dict]:
         """
         Get all companies.
 
@@ -301,7 +296,7 @@ class CompaniesDB:
             cursor.execute(query)
             return [dict(row) for row in cursor.fetchall()]
 
-    def count_companies(self, domain: Optional[str] = None, active_only: bool = True) -> int:
+    def count_companies(self, domain: str | None, active_only: bool = True) -> int:
         """
         Count total number of companies.
 
@@ -335,7 +330,7 @@ class JobsDB:
     def __init__(self, db_path: str = JOBS_DB):
         self.db_path = db_path
 
-    def get_department_id(self, raw_dept: str) -> Optional[int]:
+    def get_department_id(self, raw_dept: str) -> int | None:
         """
         Get department ID from raw department text using synonym lookup.
         Logs a warning if department is not found.
@@ -380,7 +375,7 @@ class JobsDB:
             logger.warning(f"Department not found in reference data: '{raw_dept.strip()}'")
             return None
 
-    def get_location_id(self, raw_loc: str) -> Optional[int]:
+    def get_location_id(self, raw_loc: str) -> int | None:
         """
         Get location ID from raw location text using synonym lookup.
         Logs a warning if location is not found.
@@ -429,7 +424,7 @@ class JobsDB:
             logger.warning(f"Location not found in reference data: '{clean_loc}' (from '{raw_loc}')")
             return None
 
-    def insert_job(self, job_data: Dict[str, Any]) -> Optional[int]:
+    def insert_job(self, job_data: dict) -> int | None:
         """
         Insert a new job into the database.
         Handles duplicate prevention via URL uniqueness.
@@ -528,9 +523,6 @@ class JobsDB:
         Args:
             job_id: ID of the job to update
             embedding: Pickled numpy array as bytes (BLOB)
-
-        Returns:
-            True if job was updated, False otherwise
         """
         try:
             with get_db_connection(self.db_path) as conn:
@@ -548,15 +540,9 @@ class JobsDB:
             logger.error(f"Error updating embedding for job ID {job_id}: {e}", exc_info=True)
             return False
 
-    def get_jobs_without_embeddings(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_jobs_without_embeddings(self, limit: int | None = None) -> list[dict]:
         """
         Get jobs that don't have embeddings yet.
-
-        Args:
-            limit: Optional limit on number of results
-
-        Returns:
-            List of job records as dictionaries
         """
         # Ensure embedding column exists (for existing databases)
         self._ensure_embedding_column()
@@ -600,16 +586,7 @@ class JobsDB:
             logger.debug(f"Embedding column check: {e}")
 
     ##I still dont know if we need this function
-    def get_job_by_url(self, url: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a job by its URL.
-
-        Args:
-            url: Job posting URL
-
-        Returns:
-            Job record as dictionary or None if not found
-        """
+    def get_job_by_url(self, url: str) -> dict | None:
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM jobs WHERE url = ?", (url,))
@@ -630,16 +607,10 @@ class JobsDB:
             )
             return cursor.rowcount > 0
 
-    def get_jobs_by_company(self, company_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_jobs_by_company(self, company_name: str, limit: int | None = None) -> list[dict]:
         """
         Get all jobs for a specific company.
 
-        Args:
-            company_name: Company name to filter by
-            limit: Optional limit on number of results
-
-        Returns:
-            List of job records as dictionaries
         """
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
@@ -653,13 +624,13 @@ class JobsDB:
 
     def get_jobs_by_filters(
         self,
-        workplace_type: Optional[str] = None,
-        experience_level: Optional[str] = None,
-        employment_type: Optional[str] = None,
-        department_id: Optional[int] = None,
-        location_id: Optional[int] = None,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        workplace_type: str | None = None,
+        experience_level: str | None = None,
+        employment_type: str | None = None,
+        department_id: int | None = None,
+        location_id: int | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
         """
         Get jobs filtered by various criteria.
 
@@ -708,12 +679,13 @@ class JobsDB:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
+    ##this has no use for now
     def count_jobs(
         self,
-        workplace_type: Optional[str] = None,
-        experience_level: Optional[str] = None,
-        department_id: Optional[int] = None,
-        location_id: Optional[int] = None,
+        workplace_type: str | None = None,
+        experience_level: str | None = None,
+        department_id: int | None = None,
+        location_id: int | None = None,
     ) -> int:
         """
         Count jobs with optional filters.
@@ -753,7 +725,7 @@ class JobsDB:
             return cursor.fetchone()[0]
 
     # I still dont know if we need this function
-    def get_all_departments(self) -> List[Dict[str, Any]]:
+    def get_all_departments(self) -> list[dict]:
         """
         Get all departments with their synonyms.
 
@@ -774,7 +746,7 @@ class JobsDB:
             return [dict(row) for row in cursor.fetchall()]
 
     #!!!I still dont know if we need this function
-    def get_all_locations(self) -> List[Dict[str, Any]]:
+    def get_all_locations(self) -> list[dict]:
         """
         Get all locations with their synonyms.
 
@@ -794,7 +766,8 @@ class JobsDB:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def verify_database(self) -> Dict[str, Any]:
+    ##TODO: why  do i need it?
+    def verify_database(self) -> dict[str | any]:
         """
         Verify the database structure and return statistics.
 
