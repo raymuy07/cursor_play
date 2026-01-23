@@ -100,6 +100,8 @@ async def filter_embedder_batch_call(jobs_data: dict, pending_embedded_db: Pendi
     jobs = jobs_data.get("jobs", [])
     source_url = jobs_data.get("source_url", "")
 
+
+    ### TODO: This need to move cause we need to implemet it  with dependency injection.
     embedder = TextEmbedder()
     job_filter = JobFilter()
 
