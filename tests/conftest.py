@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
-from scripts.db_utils import generate_url_hash
+
 import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scripts.db_utils import generate_url_hash
 
 # Ensure project root is importable when tests run from the repository root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -85,7 +89,7 @@ def parse_fixture_jobs(request: pytest.FixtureRequest, load_fixture_html) -> cal
         extractor = JobScraper(html_content)
         jobs = extractor.extract_jobs()
         for job in jobs:
-            job["url_hash"] = generate_url_hash(job.get("url", ""), job.get("title", ""))
+            job["url_hash"] = generate_url_hash(job.get("url", ""))
         sanitized = _sanitize_jobs(jobs)
 
         should_persist = persist if persist is not None else update_snapshots

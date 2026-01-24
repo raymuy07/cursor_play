@@ -140,8 +140,6 @@ async def filter_consumer():
         await job_queue.consume(callback, prefetch=10)
 
 
-
-
 if __name__ == "__main__":
     setup_logging()
 
