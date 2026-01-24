@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Any, Callable, Optional, dict
 
 import aio_pika
 
@@ -17,8 +16,8 @@ class RabbitMQConnection:
     def __init__(self, host: str = "localhost", port: int = 5672):
         self.host = host
         self.port = port
-        self.connection: Optional[aio_pika.RobustConnection] = None
-        self.channel: Optional[aio_pika.RobustChannel] = None
+        self.connection: aio_pika.RobustConnection | None = None
+        self.channel: aio_pika.RobustChannel | None = None
 
     async def connect(self):
         """Establish a robust connection and channel."""
@@ -67,7 +66,7 @@ class CompanyQueue(BaseQueue):
         await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.debug(f"Queued company: {company.get('company_name')}")
 
-    async def consume(self, callback: Callable[[dict], Any], prefetch: int = 10):
+    async def consume(self, callback: callable[[dict]], prefetch: int = 10):
         """
         Consume companies from queue.
         Callback should be an async function.
@@ -106,7 +105,7 @@ class JobQueue(BaseQueue):
         await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.info(f"Queued {len(jobs)} jobs from {source_url}")
 
-    async def consume(self, callback: Callable[[dict], Any], prefetch: int = 1):
+    async def consume(self, callback: callable[[dict]], prefetch: int = 1):
         """Consume job batches from queue."""
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
