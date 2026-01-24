@@ -8,13 +8,14 @@ Designed to be versatile and work with different databases and tables.
 import json
 import logging
 import os
-from typing import Any, dict, list
 
 from scripts.db_utils import JOBS_DB, get_db_connection
 
 logger = logging.getLogger(__name__)
 
-
+"""
+As for now i dont use this script, but i keep it for reference. maybe to user filtering
+"""
 class DBFilter:
     """
     Versatile database filtering class that can work with any SQLite database.
@@ -123,7 +124,7 @@ class DBFilter:
 
         return where_clause, params
 
-    def filter_records(self, filters: dict[str, list[str]]) -> list[dict[str, Any]]:
+    def filter_records(self, filters: dict[str, list[str]]) -> list[dict]:
         """
         Filter records from the database based on specified criteria.
         Args:
@@ -176,7 +177,7 @@ class DBFilter:
             self.logger.error(f"Error executing filter query: {e}")
             return []
 
-    def export_to_json(self, results: list[dict[str, Any]], output_path: str) -> bool:
+    def export_to_json(self, results: list[dict], output_path: str) -> bool:
         """
         Export filtered results to a JSON file.
         Creates the file if it doesn't exist, overwrites if it does.
