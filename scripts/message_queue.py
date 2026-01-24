@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 import logging
-from typing import Dict, Optional, Callable, Any
+
 import aio_pika
 
 logger = logging.getLogger(__name__)
@@ -9,22 +11,20 @@ logger = logging.getLogger(__name__)
 COMPANIES_QUEUE = "companies_to_scrape"
 JOBS_QUEUE = "jobs_to_persist"
 
+
 class RabbitMQConnection:
     """Manages RabbitMQ connection and channel lifecycle using aio-pika."""
 
     def __init__(self, host: str = "localhost", port: int = 5672):
         self.host = host
         self.port = port
-        self.connection: Optional[aio_pika.RobustConnection] = None
-        self.channel: Optional[aio_pika.RobustChannel] = None
+        self.connection: aio_pika.RobustConnection | None = None
+        self.channel: aio_pika.RobustChannel | None = None
 
     async def connect(self):
         """Establish a robust connection and channel."""
         if not self.connection or self.connection.is_closed:
-            self.connection = await aio_pika.connect_robust(
-                host=self.host,
-                port=self.port
-            )
+            self.connection = await aio_pika.connect_robust(host=self.host, port=self.port)
 
         if not self.channel or self.channel.is_closed:
             self.channel = await self.connection.channel()
@@ -42,8 +42,10 @@ class RabbitMQConnection:
         if self.connection:
             await self.connection.close()
 
+
 class BaseQueue:
     """Base class for RabbitMQ queues."""
+
     def __init__(self, rabbitmq: RabbitMQConnection, queue_name: str):
         self.rabbitmq = rabbitmq
         self.queue_name = queue_name
@@ -52,26 +54,21 @@ class BaseQueue:
         if not self.rabbitmq.channel or self.rabbitmq.channel.is_closed:
             await self.rabbitmq.connect()
 
+
 class CompanyQueue(BaseQueue):
     """Producer/Consumer for company scraping queue."""
 
     def __init__(self, rabbitmq: RabbitMQConnection):
         super().__init__(rabbitmq, COMPANIES_QUEUE)
 
-    async def publish(self, company: Dict):
+    async def publish(self, company: dict):
         """Push a company to the scrape queue."""
         await self._ensure_connected()
-        message = aio_pika.Message(
-            body=json.dumps(company).encode(),
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-        )
-        await self.rabbitmq.channel.default_exchange.publish(
-            message,
-            routing_key=self.queue_name
-        )
+        message = aio_pika.Message(body=json.dumps(company).encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT)
+        await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.debug(f"Queued company: {company.get('company_name')}")
 
-    async def consume(self, callback: Callable[[Dict], Any], prefetch: int = 10):
+    async def consume(self, callback: callable[[dict], None], prefetch: int = 10):
         """
         Consume companies from queue.
         Callback should be an async function.
@@ -93,6 +90,7 @@ class CompanyQueue(BaseQueue):
                         # but we might want to log it specifically.
                         raise
 
+
 class JobQueue(BaseQueue):
     """Producer/Consumer for job persistence queue."""
 
@@ -104,16 +102,12 @@ class JobQueue(BaseQueue):
         await self._ensure_connected()
         payload = {"jobs": jobs, "source_url": source_url}
         message = aio_pika.Message(
-            body=json.dumps(payload, default=str).encode(),
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            body=json.dumps(payload, default=str).encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
-        await self.rabbitmq.channel.default_exchange.publish(
-            message,
-            routing_key=self.queue_name
-        )
+        await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.info(f"Queued {len(jobs)} jobs from {source_url}")
 
-    async def consume(self, callback: Callable[[list, str], Any], prefetch: int = 1):
+    async def consume(self, callback: callable[[dict], None], prefetch: int = 1):
         """Consume job batches from queue."""
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
@@ -123,9 +117,9 @@ class JobQueue(BaseQueue):
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    data = json.loads(message.body.decode())
+                    jobs_data = json.loads(message.body.decode())
                     try:
-                        await callback(data["jobs"], data["source_url"])
+                        await callback(jobs_data)
                     except Exception as e:
                         logger.error(f"Error persisting jobs: {e}")
                         raise

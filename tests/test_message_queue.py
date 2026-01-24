@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +16,6 @@ from scripts.message_queue import (
     JobQueue,
     RabbitMQConnection,
 )
-
 
 # -----------------------------------------------------------------------------
 # Unit Tests (mocked, no real RabbitMQ required)
@@ -108,7 +106,7 @@ class TestCompanyQueue:
         company = {
             "company_name": "Test Corp",
             "domain": "lever",
-            "job_page_url": "https://jobs.lever.co/testcorp",
+            "company_page_url": "https://jobs.lever.co/testcorp",
         }
 
         with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
@@ -133,9 +131,9 @@ class TestCompanyQueue:
         queue = CompanyQueue(mock_rabbitmq)
 
         company_data = {"company_name": "Test Corp", "domain": "lever"}
-        received_companies: List[Dict] = []
+        received_companies: list[dict] = []
 
-        async def callback(company: Dict):
+        async def callback(company: dict):
             received_companies.append(company)
 
         # Create mock message
@@ -158,7 +156,7 @@ class TestCompanyQueue:
         # We need to break out of the infinite consume loop after processing one message
         call_count = 0
 
-        async def limited_callback(company: Dict):
+        async def limited_callback(company: dict):
             nonlocal call_count
             call_count += 1
             received_companies.append(company)
@@ -293,7 +291,7 @@ class TestMessageQueueIntegration:
         test_company = {
             "company_name": "Integration Test Corp",
             "domain": "comeet",
-            "job_page_url": "https://jobs.comeet.co/integration-test",
+            "company_page_url": "https://jobs.comeet.co/integration-test",
         }
 
         # Publish
@@ -302,16 +300,13 @@ class TestMessageQueueIntegration:
         # Consume (with timeout)
         received = None
 
-        async def capture_company(company: Dict):
+        async def capture_company(company: dict):
             nonlocal received
             received = company
             raise asyncio.CancelledError()  # Break out of consume loop
 
         try:
-            await asyncio.wait_for(
-                company_queue.consume(capture_company, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(company_queue.consume(capture_company, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
@@ -343,10 +338,7 @@ class TestMessageQueueIntegration:
             raise asyncio.CancelledError()
 
         try:
-            await asyncio.wait_for(
-                job_queue.consume(capture_jobs, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(job_queue.consume(capture_jobs, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 

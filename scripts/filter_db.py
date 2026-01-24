@@ -5,14 +5,17 @@ Filters records from a database based on specified criteria and exports to JSON.
 Designed to be versatile and work with different databases and tables.
 """
 
-import os
 import json
-from typing import List, Dict, Any, Optional
 import logging
+import os
 
-from scripts.db_utils import get_db_connection, JOBS_DB
+from scripts.db_utils import JOBS_DB, get_db_connection
 
 logger = logging.getLogger(__name__)
+
+"""
+As for now i dont use this script, but i keep it for reference. maybe to user filtering
+"""
 
 
 class DBFilter:
@@ -22,7 +25,7 @@ class DBFilter:
     and AND logic between different filter types.
     """
 
-    def __init__(self, db_path: str, table_name: str = 'jobs'):
+    def __init__(self, db_path: str, table_name: str = "jobs"):
         """
         Initialize the database filter.
 
@@ -33,7 +36,7 @@ class DBFilter:
         self.db_path = db_path
         self.table_name = table_name
 
-    def get_unique_values(self, column: str) -> List[str]:
+    def get_unique_values(self, column: str) -> list[str]:
         """
         Get all unique non-null values from a specific column.
         Useful for validating filter values.
@@ -53,7 +56,7 @@ class DBFilter:
             self.logger.error(f"Error fetching unique values for column '{column}': {e}")
             return []
 
-    def _validate_filters(self, filters: Dict[str, List[str]]) -> bool:
+    def _validate_filters(self, filters: dict[str, list[str]]) -> bool:
         """
         Validate that filter columns exist in the table.
         """
@@ -65,7 +68,7 @@ class DBFilter:
                 columns = [row[1] for row in cursor.fetchall()]
 
                 # Check if all filter keys are valid columns
-                for filter_col in filters.keys():
+                for filter_col in filters:
                     if filter_col not in columns:
                         self.logger.error(f"Invalid filter column: '{filter_col}'. Available columns: {columns}")
                         return False
@@ -74,7 +77,7 @@ class DBFilter:
             self.logger.error(f"Error validating filters: {e}")
             return False
 
-    def _build_filter_query(self, filters: Dict[str, List[str]]) -> tuple:
+    def _build_filter_query(self, filters: dict[str, list[str]]) -> tuple:
         """
         Build SQL WHERE clause from filters dictionary.
 
@@ -85,7 +88,7 @@ class DBFilter:
         For other fields: uses exact match (=)
 
         Args:
-            filters: Dictionary where keys are column names and values are lists of filter values
+            filters: dictionary where keys are column names and values are lists of filter values
                     Example: {'location': ['Tel Aviv', 'Haifa'], 'employment_type': ['Full-time']}
 
         Returns:
@@ -105,7 +108,7 @@ class DBFilter:
             or_conditions = []
 
             for value in values:
-                if column == 'location':
+                if column == "location":
                     # Use LIKE for location to match partial strings (e.g., "Tel Aviv-Jaffa, IL")
                     or_conditions.append(f"{column} LIKE ?")
                     params.append(f"%{value}%")
@@ -123,14 +126,14 @@ class DBFilter:
 
         return where_clause, params
 
-    def filter_records(self, filters: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    def filter_records(self, filters: dict[str, list[str]]) -> list[dict]:
         """
         Filter records from the database based on specified criteria.
         Args:
-            filters: Dictionary of filter criteria where keys are column names
+            filters: dictionary of filter criteria where keys are column names
                     and values are lists of acceptable values
         Returns:
-            List of matching records as dictionaries
+            list of matching records as dictionaries
 
         Example:
             >>> filter = DBFilter(JOBS_DB)
@@ -176,13 +179,13 @@ class DBFilter:
             self.logger.error(f"Error executing filter query: {e}")
             return []
 
-    def export_to_json(self, results: List[Dict[str, Any]], output_path: str) -> bool:
+    def export_to_json(self, results: list[dict], output_path: str) -> bool:
         """
         Export filtered results to a JSON file.
         Creates the file if it doesn't exist, overwrites if it does.
 
         Args:
-            results: List of record dictionaries to export
+            results: list of record dictionaries to export
             output_path: Path to the output JSON file
 
         Returns:
@@ -193,7 +196,7 @@ class DBFilter:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
             # Write to JSON file with pretty formatting
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, ensure_ascii=False, default=str)
 
             self.logger.info(f"Successfully exported {len(results)} records to {output_path}")
@@ -212,7 +215,7 @@ def main():
     - Employment type: "Full-time"
     """
     # Initialize filter with jobs database
-    db_filter = DBFilter(db_path=JOBS_DB, table_name='jobs')
+    db_filter = DBFilter(db_path=JOBS_DB, table_name="jobs")
 
     # Get total count before filtering
     with get_db_connection(JOBS_DB) as conn:
@@ -223,9 +226,7 @@ def main():
     logger.info(f"Total jobs in database: {total_count}")
 
     # Define filters
-    filters = {
-        'location': ['Tel Aviv']
-    }
+    filters = {"location": ["Tel Aviv"]}
 
     logger.info(f"Applying filters: {filters}")
 
@@ -233,11 +234,7 @@ def main():
     filtered_results = db_filter.filter_records(filters)
 
     # Output path
-    output_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        'data',
-        'jobs_filtered.json'
-    )
+    output_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "jobs_filtered.json")
 
     # Export to JSON
     if filtered_results:
@@ -255,4 +252,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

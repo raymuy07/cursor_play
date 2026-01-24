@@ -1,48 +1,46 @@
-import logging
-from typing import List, Dict
-from datetime import datetime
-from scripts.db_utils import CompaniesDB
-from scripts.message_queue import CompanyQueue
-from common.utils import load_config
+from __future__ import annotations
 
 import json
+import logging
+
 import requests
 
+from common.utils import load_config
+from scripts.db_utils import CompaniesDB
+from scripts.message_queue import CompanyQueue
 
 logger = logging.getLogger(__name__)
 
 
 class CompanyManager:
-
     """This class is responsible for managing companies.
     it will use the companies_db to get the companies to scrape and the config to get the max companies per run and the max age hours.
     it will publish the companies to the company_queue.
     it will also consume the companies from the company_queue and scrape the jobs.
     """
-    def __init__(self, companies_db: CompaniesDB, config: Dict, company_queue: CompanyQueue):
+
+    def __init__(self, companies_db: CompaniesDB, config: dict, company_queue: CompanyQueue):
         self.companies_db = companies_db
         self.config = config
         self.company_queue = company_queue
 
-
-
-    def get_domains_to_search(self) -> List[str]:
+    def get_domains_to_search(self) -> list[str]:
         """Get the domains to search for job pages."""
 
         # For now only Comeet is supported, but we can add more later
         # TODO: Add more domains
 
-        #"greenhouse.io",
-        #"lever.co",
-        #"workday.com",
-        #"bamboohr.com"
+        # "greenhouse.io",
+        # "lever.co",
+        # "workday.com",
+        # "bamboohr.com"
 
         return ["comeet.com"]
 
     @property
-    def publish_stale_companies(self) -> List[Dict]:
+    def publish_stale_companies(self) -> list[dict]:
         """Select companies to scrape and publish them to the company_queue."""
-        max_age_hours = self.config.get('max_age_hours')
+        max_age_hours = self.config.get("max_age_hours")
         companies = self.companies_db.get_stale_companies(max_age_hours)
         if not companies:
             logger.info("No companies require scraping at this time.")
@@ -52,40 +50,33 @@ class CompanyManager:
             self.company_queue.publish(company)
 
     @property
-    def search_for_companies(self) -> List[Dict]:
+    def search_for_companies(self) -> list[dict]:
         """Search for companies on the web."""
         domains = self.get_domains_to_search()
 
-        serper_api_key = self.config['serper_api_key']
+        serper_api_key = self.config["serper_api_key"]
 
         # Get domain-specific template or use default
-        domain_templates = self.config['google_dork']['domain_templates']
+        domain_templates = self.config["google_dork"]["domain_templates"]
 
         new_companies_count = 0
         total_results_count = 0  # Track total results across all pages
 
         for domain in domains:
-
             if domain not in domain_templates:
                 logger.error(f"No specific template for {domain}")
                 continue
 
-            query = domain_templates[domain]['query_template']
+            query = domain_templates[domain]["query_template"]
 
-            for page in range(1,51): ##51 is the max pages i can allow.
+            for page in range(1, 51):  ##51 is the max pages i can allow.
                 try:
                     # Prepare Serper API request
                     url = "https://google.serper.dev/search"
 
-                    payload = json.dumps([{
-                        "q": query,
-                        "page": page
-                    }])
+                    payload = json.dumps([{"q": query, "page": page}])
 
-                    headers = {
-                        'X-API-KEY': serper_api_key,
-                        'Content-Type': 'application/json'
-                    }
+                    headers = {"X-API-KEY": serper_api_key, "Content-Type": "application/json"}
 
                     # Make API request
                     response = requests.post(url, headers=headers, data=payload, timeout=30)
@@ -95,20 +86,20 @@ class CompanyManager:
                     search_results = response.json()
                     search_results = search_results[0]
 
-                    if not search_results or 'organic' not in search_results:
+                    if not search_results or "organic" not in search_results:
                         logger.warning(f"No organic results found for {domain} page {page}")
                         break
 
                     # Count results from this page
-                    page_results_count = len(search_results.get('organic', []))
+                    page_results_count = len(search_results.get("organic", []))
                     total_results_count += page_results_count
 
                     # Process search results and insert into database
-                    page_new_count = self._process_search_results(search_results['organic'], domain)
+                    page_new_count = self._process_search_results(search_results["organic"], domain)
                     new_companies_count += page_new_count
 
                     # If we got fewer than 10 results, we've likely reached the end
-                    if len(search_results['organic']) < 10:
+                    if len(search_results["organic"]) < 10:
                         logger.info(f"Reached end of results for {domain} at page {page}")
                         break
 
@@ -119,27 +110,27 @@ class CompanyManager:
                     logger.error(f"Error processing {domain} page {page}: {e}")
                     break
 
-    def _process_search_results(self, organic_results: List[Dict], domain: str) -> int:
+    def _process_search_results(self, organic_results: list[dict], domain: str) -> int:
         """Process search results, extract company info, and insert into database."""
         new_companies_count = 0
 
         for result in organic_results:
             try:
-                title = result.get('title', '')
-                link = result.get('link', '')
+                title = result.get("title", "")
+                link = result.get("link", "")
 
                 company_name = self._extract_company_name_from_title(title, domain)
 
                 if company_name and link:
                     # Clean the URL to remove job-specific paths
-                    clean_url = self._clean_job_page_url(link)
+                    clean_url = self._clean_company_page_url(link)
 
                     company_data = {
                         "company_name": company_name,
                         "domain": domain,
-                        "job_page_url": clean_url,
+                        "company_page_url": clean_url,
                         "title": title,
-                        "source": "google_serper"
+                        "source": "google_serper",
                     }
 
                     company_id = self.companies_db.insert_company(company_data)
@@ -176,13 +167,12 @@ class CompanyManager:
 
         # Remove trailing separators and extra whitespace
         # This handles cases like "Company Name -" or "Company Name |"
-        while name and name[-1] in ('-', '|', ':', '·'):
+        while name and name[-1] in ("-", "|", ":", "·"):
             name = name[:-1].strip()
 
         return name if name else None
 
-
-    def _clean_job_page_url(self, url: str) -> str:
+    def _clean_company_page_url(self, url: str) -> str:
         """
         Clean job page URL to remove job-specific paths
         Examples:
@@ -194,21 +184,20 @@ class CompanyManager:
         try:
             # For Comeet URLs, keep only up to the company ID part
             # Pattern: /jobs/{company_name}/{company_id}/...
-            if 'comeet.com/jobs/' in url:
-                parts = url.split('/')
+            if "comeet.com/jobs/" in url:
+                parts = url.split("/")
                 if len(parts) >= 6:  # https://www.comeet.com/jobs/company/id
                     # Keep only up to the company ID
-                    return '/'.join(parts[:6])
-            if 'lever.co/jobs/' in url:
-                parts = url.split('/')
+                    return "/".join(parts[:6])
+            if "lever.co/jobs/" in url:
+                parts = url.split("/")
                 if len(parts) >= 3:  # https://lever.co/company
                     # Keep only up to the company ID
-                    return '/'.join(parts[:3])
+                    return "/".join(parts[:3])
 
             return url
         except Exception:
             return url
-
 
 
 if __name__ == "__main__":

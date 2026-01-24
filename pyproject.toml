@@ -20,13 +20,16 @@ dependencies = [
     "python-docx",
     "numpy",
     "aio-pika",
+    "aiosqlite",
     "httpx",
+    "PyYAML",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
+    "ruff",
 ]
 
 [tool.setuptools.packages.find]
@@ -41,3 +44,44 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+# ============================================================================
+# Ruff Configuration
+# ============================================================================
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+# Include all Python files in the project
+include = ["*.py", "scripts/**/*.py", "common/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "B905",   # zip without strict parameter
+    "SIM108", # use ternary operator instead of if-else
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["scripts", "common"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
