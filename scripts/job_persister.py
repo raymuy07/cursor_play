@@ -4,20 +4,13 @@ Processes jobs in the database and generates embeddings for job descriptions.
 Uses the same TextEmbedder class as CV embedding for consistency.
 """
 
-import os
-import pickle
-import time
-import argparse
 import logging
-from typing import Optional
 
-from common.utils import load_config
-from common.txt_embedder import TextEmbedder
 from scripts.db_utils import JobsDB
+from scripts.job_filter_embedder import JobFilter
 
+##TODO: need to change the whole logging structure so it wont take by name, but for module.
 logger = logging.getLogger(__name__)
-
-
 
 
 class JobPersister:
@@ -31,7 +24,7 @@ class JobPersister:
         Filters out invalid jobs using filter_valid_jobs().
 
         Args:
-            jobs: List of job dictionaries to save
+            jobs: list of job dictionaries to save
             jobs_db: JobsDB instance for database operations
 
         Returns:
@@ -66,30 +59,14 @@ class JobPersister:
         return success, inserted, skipped
 
     @staticmethod
-    def generate_url_hash(url: str) -> str:
-        """Generate a hash from a URL for unique identification."""
-        if not url:
-            return ""
-        return hashlib.md5(url.encode('utf-8')).hexdigest()
-
-    @staticmethod
-    def add_hash_to_jobs(jobs: list[dict]) -> List[Dict]:
-        """Add a hash field to each job based on its URL."""
-        for job in jobs:
-            job['url_hash'] = JobPersister.generate_url_hash(job.get('url', ''))
-        return jobs
-
-    @staticmethod
     def enrich_jobs_with_company(jobs: list[dict], company: dict) -> list[dict]:
         """Ensure jobs include company_name and source from the company record when missing."""
         for job in jobs:
-            if not job.get('company_name'):
-                job['company_name'] = company.get('company_name')
-            if not job.get('source') and company.get('domain'):
-                job['source'] = company.get('domain')
+            if not job.get("company_name"):
+                job["company_name"] = company.get("company_name")
+            if not job.get("source") and company.get("domain"):
+                job["source"] = company.get("domain")
         return jobs
-
-
 
 
 if __name__ == "__main__":

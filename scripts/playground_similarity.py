@@ -31,7 +31,7 @@ def sample_batch_of_jobs(jobs_db: JobsDB, text_embedder: TextEmbedder, cv_embedd
     sample_size = min(50, len(jobs))  # Handle case where < 50 jobs exist
     random_jobs = random.sample(jobs, sample_size)
 
-    for i, job in enumerate(random_jobs):
+    for _, job in enumerate(random_jobs):
         # Jobs are dicts, not objects - use dict access
         job_title = job.get("title", "Unknown")
         job_description = job.get("description", "")

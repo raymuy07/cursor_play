@@ -141,7 +141,7 @@ class TextEmbedder:
         Save embedding data to a pickle file.
 
         Args:
-            embedding_data: Dictionary containing embedding and metadata
+            embedding_data: dictionary containing embedding and metadata
             output_path: Path where to save the pickle file
         """
         try:

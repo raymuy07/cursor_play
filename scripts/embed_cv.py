@@ -3,15 +3,15 @@ CV Embedding Script
 Extracts text from CV files (PDF or DOCX), transforms via LLM, and generates embeddings.
 """
 
-import os
-import re
 import logging
+import re
 from pathlib import Path
-import yaml
 
-from common.utils import load_config
-from common.txt_embedder import TextEmbedder
+import yaml
 from openai import OpenAI
+
+from common.txt_embedder import TextEmbedder
+from common.utils import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class CVProcessor:
     def __init__(self):
         self.embedder = TextEmbedder()
         self.config = load_config()
-        self.client = OpenAI(api_key=self.config.get('openai_api_key'))
+        self.client = OpenAI(api_key=self.config.get("openai_api_key"))
         self.prompts = self._load_prompts()
 
     def process(self, file_path: str) -> dict:
@@ -57,30 +57,27 @@ class CVProcessor:
 
         # 3. Embed the transformed text
         result = self.embedder.embed(transformed_text)
-        result['source_file'] = Path(file_path).name
-        result['transformed_text'] = transformed_text
+        result["source_file"] = Path(file_path).name
+        result["transformed_text"] = transformed_text
 
         return result
 
     def _load_prompts(self) -> dict:
         """Load prompts from YAML file."""
-        with open(PROMPTS_PATH, 'r', encoding='utf-8') as f:
+        with open(PROMPTS_PATH, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
     def _transform_with_llm(self, cv_text: str) -> str:
         """Transform CV text to JD-style description using LLM."""
-        prompt_config = self.prompts['cv_to_job_description']
+        prompt_config = self.prompts["cv_to_job_description"]
 
-        system_prompt = prompt_config['system_prompt']
-        user_message = prompt_config['user_template'].format(cv_text=cv_text)
+        system_prompt = prompt_config["system_prompt"]
+        user_message = prompt_config["user_template"].format(cv_text=cv_text)
 
         response = self.client.chat.completions.create(
-            model=prompt_config.get('model', 'gpt-4'),
-            temperature=prompt_config.get('temperature', 0.3),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
+            model=prompt_config.get("model", "gpt-4"),
+            temperature=prompt_config.get("temperature", 0.3),
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
         )
 
         return response.choices[0].message.content
@@ -89,22 +86,21 @@ class CVProcessor:
         """Auto-detect format and extract."""
         ext = Path(file_path).suffix.lower()
 
-        if ext == '.pdf':
+        if ext == ".pdf":
             return self._extract_text_from_pdf(file_path)
-        elif ext == '.docx':
+        elif ext == ".docx":
             return self._extract_text_from_docx(file_path)
         else:
             raise ValueError(f"Unsupported format: {ext}. Use .pdf or .docx")
 
     def _extract_text_from_pdf(self, file_path: str) -> str:
-
         if PyPDF2 is None:
             raise ImportError("PyPDF2 is required for PDF processing. Install it with: pip install PyPDF2")
 
         text_parts = []
 
         try:
-            with open(file_path, 'rb') as file:
+            with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 num_pages = len(pdf_reader.pages)
 
@@ -120,10 +116,9 @@ class CVProcessor:
             return self._clean_text(full_text)
 
         except Exception as e:
-            raise RuntimeError(f"Error reading PDF file: {str(e)}")
+            raise RuntimeError(f"Error reading PDF file: {e!s}")
 
     def _extract_text_from_docx(self, file_path: str) -> str:
-
         if Document is None:
             raise ImportError("python-docx is required for DOCX processing. Install it with: pip install python-docx")
 
@@ -153,18 +148,19 @@ class CVProcessor:
             return self._clean_text(full_text)
 
         except Exception as e:
-            raise RuntimeError(f"Error reading DOCX file: {str(e)}")
+            raise RuntimeError(f"Error reading DOCX file: {e!s}")
 
     def _clean_text(self, text: str) -> str:
         """Remove excessive whitespace and normalize text."""
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\n\s*\n", "\n\n", text)
         text = text.strip()
         return text
 
 
 if __name__ == "__main__":
     from common.utils import setup_logging
+
     setup_logging()
 
     # Example usage
@@ -172,4 +168,3 @@ if __name__ == "__main__":
     result = processor.process("Guy Leiba-CV-0925.pdf")
     print(f"Embedding dim: {len(result['embedding'])}")
     print(f"Transformed text preview: {result['transformed_text'][:500]}...")
-

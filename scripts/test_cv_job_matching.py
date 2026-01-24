@@ -9,20 +9,19 @@ This script:
 5. Ranks jobs by match score
 """
 
-import os
 import json
-import pickle
 import logging
-from typing import List, Dict, Tuple, Optional
-from pathlib import Path
+import os
+import pickle
+import sys
 
 from common.utils import load_config
 
 logger = logging.getLogger(__name__)
 
 try:
-    from sentence_transformers import SentenceTransformer
     import numpy as np
+    from sentence_transformers import SentenceTransformer
 except ImportError:
     logger.error("Error: Required packages not installed.")
     logger.error("Please run: pip install sentence-transformers numpy")
@@ -48,10 +47,10 @@ class JobMatcher:
         # Load CV embeddings
         logger.info(f"Loading CV embeddings from: {cv_embedding_path}")
         self.cv_data = self._load_cv_embeddings(cv_embedding_path)
-        self.cv_embedding = self.cv_data['embedding']
+        self.cv_embedding = self.cv_data["embedding"]
 
         # Verify model consistency
-        if self.cv_data['model_name'] != model_name:
+        if self.cv_data["model_name"] != model_name:
             logger.warning(
                 f"Model mismatch! CV was embedded with {self.cv_data['model_name']}, "
                 f"but using {model_name} for jobs. This may affect accuracy."
@@ -61,15 +60,15 @@ class JobMatcher:
         logger.info(f"Loading sentence-transformer model: {model_name}")
         self.model = SentenceTransformer(model_name)
 
-    def _load_cv_embeddings(self, path: str) -> Dict:
+    def _load_cv_embeddings(self, path: str) -> dict:
         """Load CV embeddings from pickle file."""
         if not os.path.exists(path):
             raise FileNotFoundError(f"CV embeddings file not found: {path}")
 
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             data = pickle.load(f)
 
-        logger.info(f"CV embeddings loaded successfully")
+        logger.info("CV embeddings loaded successfully")
         logger.info(f"  - Model: {data['model_name']}")
         logger.info(f"  - Embedding dimension: {data['embedding_dim']}")
         logger.info(f"  - CV text length: {data['text_length']} characters")
@@ -77,7 +76,7 @@ class JobMatcher:
 
         return data
 
-    def load_jobs(self, jobs_file: str, max_jobs: int = 30) -> List[Dict]:
+    def load_jobs(self, jobs_file: str, max_jobs: int = 30) -> list[dict]:
         """
         Load jobs from JSON file.
 
@@ -86,14 +85,14 @@ class JobMatcher:
             max_jobs: Maximum number of jobs to load
 
         Returns:
-            List of job dictionaries
+            list of job dictionaries
         """
         logger.info(f"Loading jobs from: {jobs_file}")
 
         if not os.path.exists(jobs_file):
             raise FileNotFoundError(f"Jobs file not found: {jobs_file}")
 
-        with open(jobs_file, 'r', encoding='utf-8') as f:
+        with open(jobs_file, encoding="utf-8") as f:
             all_jobs = json.load(f)
 
         # Take first max_jobs
@@ -103,7 +102,7 @@ class JobMatcher:
 
         return jobs
 
-    def extract_job_text(self, job: Dict) -> str:
+    def extract_job_text(self, job: dict) -> str:
         """
         Extract and combine description and requirements text from a job.
 
@@ -113,26 +112,26 @@ class JobMatcher:
         Returns:
             Combined text from description and requirements
         """
-        description_obj = job.get('description', {})
+        description_obj = job.get("description", {})
 
         # Extract both description and requirements
-        description_text = description_obj.get('description', '')
-        requirements_text = description_obj.get('requirements', '')
+        description_text = description_obj.get("description", "")
+        requirements_text = description_obj.get("requirements", "")
 
         # Combine with clear separation
         combined_text = f"{description_text}\n\n{requirements_text}".strip()
 
         return combined_text
 
-    def embed_jobs(self, jobs: List[Dict]) -> List[Dict]:
+    def embed_jobs(self, jobs: list[dict]) -> list[dict]:
         """
         Generate embeddings for all job descriptions.
 
         Args:
-            jobs: List of job dictionaries
+            jobs: list of job dictionaries
 
         Returns:
-            List of jobs with added 'embedding' and 'full_text' fields
+            list of jobs with added 'embedding' and 'full_text' fields
         """
         logger.info(f"Generating embeddings for {len(jobs)} jobs...")
 
@@ -151,9 +150,9 @@ class JobMatcher:
 
             # Add to job data
             job_with_embedding = job.copy()
-            job_with_embedding['embedding'] = embedding
-            job_with_embedding['full_text'] = job_text
-            job_with_embedding['text_length'] = len(job_text)
+            job_with_embedding["embedding"] = embedding
+            job_with_embedding["full_text"] = job_text
+            job_with_embedding["text_length"] = len(job_text)
 
             enriched_jobs.append(job_with_embedding)
 
@@ -184,45 +183,45 @@ class JobMatcher:
 
         return float(similarity)
 
-    def score_jobs(self, jobs_with_embeddings: List[Dict]) -> List[Dict]:
+    def score_jobs(self, jobs_with_embeddings: list[dict]) -> list[dict]:
         """
         Score jobs based on cosine similarity to CV.
 
         Args:
-            jobs_with_embeddings: List of jobs with embeddings
+            jobs_with_embeddings: list of jobs with embeddings
 
         Returns:
-            List of jobs with added 'similarity_score' field, sorted by score (descending)
+            list of jobs with added 'similarity_score' field, sorted by score (descending)
         """
         logger.info(f"Calculating similarity scores for {len(jobs_with_embeddings)} jobs...")
 
         scored_jobs = []
 
         for job in jobs_with_embeddings:
-            job_embedding = job['embedding']
+            job_embedding = job["embedding"]
 
             # Calculate cosine similarity
             similarity = self.cosine_similarity(self.cv_embedding, job_embedding)
 
             # Add score to job
             job_scored = job.copy()
-            job_scored['similarity_score'] = similarity
+            job_scored["similarity_score"] = similarity
 
             scored_jobs.append(job_scored)
 
         # Sort by similarity score (highest first)
-        scored_jobs.sort(key=lambda x: x['similarity_score'], reverse=True)
+        scored_jobs.sort(key=lambda x: x["similarity_score"], reverse=True)
 
-        logger.info(f"Job scoring complete")
+        logger.info("Job scoring complete")
 
         return scored_jobs
 
-    def display_results(self, scored_jobs: List[Dict], top_n: int = 10):
+    def display_results(self, scored_jobs: list[dict], top_n: int = 10):
         """
         Display top matching jobs.
 
         Args:
-            scored_jobs: List of scored jobs (sorted by score)
+            scored_jobs: list of scored jobs (sorted by score)
             top_n: Number of top results to display
         """
         logger.info("\n" + "=" * 80)
@@ -230,7 +229,7 @@ class JobMatcher:
         logger.info("=" * 80)
 
         for i, job in enumerate(scored_jobs[:top_n], 1):
-            score_pct = job['similarity_score'] * 100
+            score_pct = job["similarity_score"] * 100
 
             logger.info(f"\n#{i} - Match Score: {score_pct:.2f}%")
             logger.info(f"  Title: {job.get('title', 'N/A')}")
@@ -247,34 +246,34 @@ class JobMatcher:
         logger.info("STATISTICS")
         logger.info("=" * 80)
 
-        scores = [job['similarity_score'] for job in scored_jobs]
+        scores = [job["similarity_score"] for job in scored_jobs]
         logger.info(f"Total jobs scored: {len(scored_jobs)}")
         logger.info(f"Average similarity: {np.mean(scores) * 100:.2f}%")
         logger.info(f"Highest similarity: {np.max(scores) * 100:.2f}%")
         logger.info(f"Lowest similarity: {np.min(scores) * 100:.2f}%")
         logger.info(f"Standard deviation: {np.std(scores) * 100:.2f}%")
 
-    def save_results(self, scored_jobs: List[Dict], output_path: str):
+    def save_results(self, scored_jobs: list[dict], output_path: str):
         """
         Save scored jobs to JSON file.
 
         Args:
-            scored_jobs: List of scored jobs
+            scored_jobs: list of scored jobs
             output_path: Path to save results
         """
         # Prepare data for JSON (remove numpy arrays)
         jobs_for_export = []
 
         for job in scored_jobs:
-            job_export = {k: v for k, v in job.items() if k not in ['embedding', 'full_text']}
-            job_export['similarity_score'] = float(job['similarity_score'])
+            job_export = {k: v for k, v in job.items() if k not in ["embedding", "full_text"]}
+            job_export["similarity_score"] = float(job["similarity_score"])
             jobs_for_export.append(job_export)
 
         # Create directory if needed
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Save to JSON
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(jobs_for_export, f, indent=2, ensure_ascii=False)
 
         logger.info(f"\nResults saved to: {output_path}")
@@ -286,7 +285,7 @@ def main():
     # Load configuration
     try:
         config = load_config()
-        cv_config = config.get('cv_embedding', {})
+        cv_config = config.get("cv_embedding", {})
     except Exception as e:
         print(f"Error loading configuration: {e}")
         sys.exit(1)
@@ -296,10 +295,10 @@ def main():
     logger.info("=" * 80)
 
     # Configuration
-    cv_embeddings_path = cv_config.get('embeddings_output', 'data/cv_embeddings.pkl')
-    jobs_file = 'data/jobs_raw.json'
-    output_file = 'data/job_match_results.json'
-    model_name = cv_config.get('model_name', 'all-MiniLM-L6-v2')
+    cv_embeddings_path = cv_config.get("embeddings_output", "data/cv_embeddings.pkl")
+    jobs_file = "data/jobs_raw.json"
+    output_file = "data/job_match_results.json"
+    model_name = cv_config.get("model_name", "all-MiniLM-L6-v2")
     num_jobs = 80  # Number of jobs to test
     top_n = 10  # Number of top results to display
 
@@ -337,10 +336,10 @@ def main():
     except Exception as e:
         logger.error(f"Error during matching: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-
