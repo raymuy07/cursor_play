@@ -543,20 +543,13 @@ class JobsDB:
         logger.warning(f"Location not found in reference data: '{clean_loc}' (from '{raw_loc}')")
         return None
 
-    async def insert_job(self, db: aiosqlite.Connection, job_data: dict) -> int | None:
+    async def insert_job(self, job_data: dict, db: aiosqlite.Connection) -> int | None:
         """
         Insert a new job into the database.
         Handles duplicate prevention via URL uniqueness.
         Automatically normalizes departments and locations.
 
-        Args:
-            db: Async database connection
-            job_data: dictionary containing job information
-                Required: title, url
-                Optional: All other job fields
-
-        Returns:
-            ID of the inserted record, or None if duplicate or error occurred
+        Jobs will be inserted in batches if we want we can write additional sync method for testing
         """
         try:
             # Validate required fields
@@ -575,7 +568,7 @@ class JobsDB:
                 description = "\n\n".join(f"{k}:\n{v}" for k, v in description.items() if v)
 
             # Generate URL hash
-            url_hash = generate_url_hash(url, job_data.get("title", ""))
+            url_hash = generate_url_hash(url)
 
             # Parse from_domain from URL
             from_domain = None

@@ -3,6 +3,7 @@
 Utility Functions
 Common helper functions used across scripts
 """
+
 import json
 import logging
 import os
@@ -13,8 +14,6 @@ from pathlib import Path
 import yaml
 
 logger = logging.getLogger(__name__)
-
-
 
 
 class _MaxLevelFilter(logging.Filter):

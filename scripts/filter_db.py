@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 """
 As for now i dont use this script, but i keep it for reference. maybe to user filtering
 """
+
+
 class DBFilter:
     """
     Versatile database filtering class that can work with any SQLite database.
@@ -66,7 +68,7 @@ class DBFilter:
                 columns = [row[1] for row in cursor.fetchall()]
 
                 # Check if all filter keys are valid columns
-                for filter_col in filters.keys():
+                for filter_col in filters:
                     if filter_col not in columns:
                         self.logger.error(f"Invalid filter column: '{filter_col}'. Available columns: {columns}")
                         return False
