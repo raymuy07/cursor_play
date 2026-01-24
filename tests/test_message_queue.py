@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -132,9 +131,9 @@ class TestCompanyQueue:
         queue = CompanyQueue(mock_rabbitmq)
 
         company_data = {"company_name": "Test Corp", "domain": "lever"}
-        received_companies: List[Dict] = []
+        received_companies: list[dict] = []
 
-        async def callback(company: Dict):
+        async def callback(company: dict):
             received_companies.append(company)
 
         # Create mock message
@@ -157,7 +156,7 @@ class TestCompanyQueue:
         # We need to break out of the infinite consume loop after processing one message
         call_count = 0
 
-        async def limited_callback(company: Dict):
+        async def limited_callback(company: dict):
             nonlocal call_count
             call_count += 1
             received_companies.append(company)
@@ -301,7 +300,7 @@ class TestMessageQueueIntegration:
         # Consume (with timeout)
         received = None
 
-        async def capture_company(company: Dict):
+        async def capture_company(company: dict):
             nonlocal received
             received = company
             raise asyncio.CancelledError()  # Break out of consume loop

@@ -12,7 +12,6 @@ import logging
 import os
 import sqlite3
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
 
 import aiosqlite
 
@@ -31,6 +30,13 @@ PENDING_EMBEDDED_DB = os.path.join(DATA_DIR, "pending_embedded.db")
 def ensure_data_directory():
     """Ensure the data directory exists"""
     os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def generate_url_hash(url: str) -> str:
+    """Generate a hash from a URL for unique identification."""
+    if not url:
+        return ""
+    return hashlib.md5(url.encode("utf-8")).hexdigest()
 
 
 @contextmanager
@@ -98,20 +104,6 @@ def initialize_database(db_path: str, schema: str):
         conn.commit()
 
 
-def generate_job_hash(url: str, title: str = "") -> str:
-    """
-    Generate a unique hash for a job posting.
-    Uses URL as primary identifier, with title as backup.
-    """
-    if not url:
-        # If no URL, use title + timestamp (less ideal but handles edge cases)
-        content = f"{title}_{datetime.now().isoformat()}"
-    else:
-        content = url
-
-    return hashlib.md5(content.encode("utf-8")).hexdigest()
-
-
 """This will be our first async db, so we will use aiosqlite"""
 
 
@@ -122,6 +114,7 @@ class PendingEmbeddedDB:
         self.db_path = db_path
         self.initialize_database()
 
+    ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
@@ -171,12 +164,14 @@ class PendingEmbeddedDB:
             logger.error(f"Error updating batch {batch_id}: {e}")
             return False
 
+
 class CompaniesDB:
     """Interface for companies.db operations - supports both sync and async"""
 
     def __init__(self, db_path: str = COMPANIES_DB):
         self.db_path = db_path
 
+    ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         """Initialize the companies database."""
         with get_db_connection(self.db_path) as conn:
@@ -201,7 +196,7 @@ class CompaniesDB:
 
         Args:
             db: Async database connection
-            company_data: Dictionary containing company information
+            company_data: dictionary containing company information
 
         Returns:
             ID of the inserted record, or None if duplicate
@@ -300,7 +295,7 @@ class CompaniesDB:
             active_only: If True, only return active companies
 
         Returns:
-            List of company records as dictionaries
+            list of company records as dictionaries
         """
         query = "SELECT * FROM companies WHERE domain = ?"
         params = [domain]
@@ -346,7 +341,7 @@ class CompaniesDB:
             limit: Optional limit on number of results
 
         Returns:
-            List of company records as dictionaries
+            list of company records as dictionaries
         """
         query = "SELECT * FROM companies"
         if active_only:
@@ -396,6 +391,7 @@ class JobsDB:
     def __init__(self, db_path: str = JOBS_DB):
         self.db_path = db_path
 
+    ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         """Initialize the jobs database with all required tables."""
         with get_db_connection(self.db_path) as conn:
@@ -470,12 +466,6 @@ class JobsDB:
         Get department ID from raw department text using synonym lookup.
         Logs a warning if department is not found.
 
-        Args:
-            db: Async database connection
-            raw_dept: Raw department text from scraping
-
-        Returns:
-            Department ID or None if not found or if raw_dept is None/empty
         """
         if not raw_dept or not raw_dept.strip():
             return None
@@ -517,8 +507,6 @@ class JobsDB:
             db: Async database connection
             raw_loc: Raw location text from scraping
 
-        Returns:
-            Location ID or None if not found or if raw_loc is None/empty
         """
         if not raw_loc or not raw_loc.strip():
             return None
@@ -563,7 +551,7 @@ class JobsDB:
 
         Args:
             db: Async database connection
-            job_data: Dictionary containing job information
+            job_data: dictionary containing job information
                 Required: title, url
                 Optional: All other job fields
 
@@ -587,7 +575,7 @@ class JobsDB:
                 description = "\n\n".join(f"{k}:\n{v}" for k, v in description.items() if v)
 
             # Generate URL hash
-            url_hash = generate_job_hash(url, job_data.get("title", ""))
+            url_hash = generate_url_hash(url, job_data.get("title", ""))
 
             # Parse from_domain from URL
             from_domain = None
@@ -788,7 +776,7 @@ class JobsDB:
             limit: Optional limit on number of results
 
         Returns:
-            List of job records as dictionaries
+            list of job records as dictionaries
         """
         query = "SELECT * FROM jobs WHERE 1=1"
         params = []
@@ -870,12 +858,6 @@ class JobsDB:
     async def get_all_departments(self, db: aiosqlite.Connection) -> list[dict]:
         """
         Get all departments with their synonyms.
-
-        Args:
-            db: Async database connection
-
-        Returns:
-            List of department records
         """
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -890,6 +872,19 @@ class JobsDB:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
+    # Sync versions for manual/UI tools
+    def get_all_departments_sync(self) -> list[dict]:
+        """Sync version for UI tools."""
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT d.*, GROUP_CONCAT(ds.synonym, ', ') as synonyms
+                FROM departments d
+                LEFT JOIN department_synonyms ds ON d.id = ds.department_id
+                GROUP BY d.id
+                ORDER BY d.canonical_name
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
     async def get_all_locations(self, db: aiosqlite.Connection) -> list[dict]:
         """
         Get all locations with their synonyms.
@@ -898,7 +893,7 @@ class JobsDB:
             db: Async database connection
 
         Returns:
-            List of location records
+            list of location records
         """
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -921,8 +916,8 @@ class JobsDB:
             db: Async database connection
 
         Returns:
-            Dictionary with verification results including:
-            - tables_exist: List of tables found
+            dictionary with verification results including:
+            - tables_exist: list of tables found
             - jobs_count: Number of jobs in database
             - departments_count: Number of departments
             - locations_count: Number of locations

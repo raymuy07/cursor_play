@@ -60,8 +60,8 @@ class JobFilter:
 
         Returns:
         Tuple of (valid_jobs, filter_counts) where:
-        - valid_jobs: List of jobs that passed all filters
-        - filter_counts: Dictionary with counts of filtered jobs by reason
+        - valid_jobs: list of jobs that passed all filters
+        - filter_counts: dictionary with counts of filtered jobs by reason
                         e.g., {'hebrew': 5, 'general_department': 2}
         """
         valid_jobs = []
@@ -99,7 +99,6 @@ async def filter_embedder_batch_call(jobs_data: dict, pending_embedded_db: Pendi
     total_jobs_for_batch = []
     jobs = jobs_data.get("jobs", [])
     source_url = jobs_data.get("source_url", "")
-
 
     ### TODO: This need to move cause we need to implemet it  with dependency injection.
     embedder = TextEmbedder()
@@ -141,8 +140,6 @@ async def filter_consumer():
         await job_queue.consume(callback, prefetch=10)
 
 
-def persister():
-    pass
 
 
 if __name__ == "__main__":

@@ -1,16 +1,13 @@
-import os
 from pathlib import Path
 
 from scripts.job_scraper import JobScraper
-from scripts.job_filter_parser import JobPersister
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 def load_fixture_html(filename: str) -> str:
     path = FIXTURES_DIR / filename
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -31,9 +28,7 @@ def test_job_extraction_from_fixtures():
             # Basic shape checks on first job
             first = jobs[0]
             assert isinstance(first, dict)
-            assert "title" in first and first["title"]
+            assert first.get("title")
 
     # Ensure at least one fixture yields jobs
     assert total_found > 0
-
-

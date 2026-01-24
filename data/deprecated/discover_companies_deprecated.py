@@ -8,7 +8,7 @@ import json
 import os
 import sys
 import time
-from typing import Dict, List
+from typing import dict, list
 
 import requests
 
@@ -28,7 +28,7 @@ We are now using the company_selector.py script to discover companies.
 """
 
 
-def discover_companies() -> List[Dict]:
+def discover_companies() -> list[dict]:
     """
     Discover company job pages using Google dork queries via Serper API
     Returns list of all companies currently in the database
@@ -94,7 +94,7 @@ def discover_companies() -> List[Dict]:
     return companies_db.get_all_companies()
 
 
-def search_domain_jobs(domain: str, config: Dict, companies_db: CompaniesDB = None) -> int:
+def search_domain_jobs(domain: str, config: dict, companies_db: CompaniesDB = None) -> int:
     """
     Search for job pages on a specific domain using Serper API
     Returns the count of new companies added to the database
@@ -173,7 +173,7 @@ def search_domain_jobs(domain: str, config: Dict, companies_db: CompaniesDB = No
     return new_companies_count
 
 
-def process_search_results(organic_results: List[Dict], domain: str, companies_db: CompaniesDB = None) -> int:
+def process_search_results(organic_results: list[dict], domain: str, companies_db: CompaniesDB = None) -> int:
     """
     Process search results, extract company information, and insert into database
     Returns the count of new companies added
