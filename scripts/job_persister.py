@@ -6,7 +6,8 @@ Uses the same TextEmbedder class as CV embedding for consistency.
 
 import logging
 
-from scripts.db_utils import JobsDB
+from common.txt_embedder import TextEmbedder
+from scripts.db_utils import JobsDB, PendingEmbeddedDB, get_async_db_connection
 from scripts.job_filter_embedder import JobFilter
 
 ##TODO: need to change the whole logging structure so it wont take by name, but for module.
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 class JobPersister:
     """Handles persistence of job batches to the database."""
+
+    def __init__(self):
+        self.embedder = TextEmbedder()
+        self.jobs_db = JobsDB()
 
     @staticmethod
     def save_jobs_to_db(jobs: list[dict], jobs_db: JobsDB) -> tuple[bool, int, int]:
@@ -67,6 +72,38 @@ class JobPersister:
             if not job.get("source") and company.get("domain"):
                 job["source"] = company.get("domain")
         return jobs
+
+    async def check_pending_batches(self, pending_db: PendingEmbeddedDB):
+        """Check status of pending batches and persist results if ready."""
+        logger.info("Checking pending embedding batches...")
+        async with get_async_db_connection(pending_db.db_path) as db:
+            batches = await pending_db.get_processing_batches(db)
+
+            if not batches:
+                logger.info("No pending batches to check.")
+                return
+
+            for batch_record in batches:
+                batch_id = batch_record["batch_id"]
+                try:
+                    status_info = await self.embedder.get_batch_status(batch_id)
+
+                    if status_info["status"] == "completed":
+                        logger.info(f"Batch {batch_id} completed. Retrieving results...")
+                        embeddings = self.embedder.get_batch_results(batch_id)
+
+                        # TODO: Map embeddings back to jobs and save them
+                        # This requires a way to retrieve the original jobs for this batch
+                        # For now, we mark it as completed to avoid re-processing
+                        await pending_db.update_batch_status(db, batch_id, "completed")
+                        logger.info(f"Batch {batch_id} processed and marked completed.")
+
+                    elif status_info["status"] == "failed":
+                        logger.error(f"Batch {batch_id} failed.")
+                        await pending_db.update_batch_status(db, batch_id, "failed")
+
+                except Exception as e:
+                    logger.error(f"Error checking batch {batch_id}: {e}")
 
 
 if __name__ == "__main__":

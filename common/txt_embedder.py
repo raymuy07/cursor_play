@@ -108,11 +108,12 @@ class TextEmbedder:
             "error_file_id": batch.error_file_id,
         }
 
-    async def get_batch_results(self, batch_id: str) -> dict[str, list[float]]:
+    def get_batch_results(self, batch_id: str) -> dict[str, list[float]]:
         """
         Retrieve results from a completed batch job.
+        its not async casue we use in in the scheduler which is blocking.
         """
-        batch = await self.client.batches.retrieve(batch_id)
+        batch = self.client.batches.retrieve(batch_id)
 
         if batch.status != "completed":
             raise ValueError(f"Batch not complete, status: {batch.status}")
@@ -121,7 +122,7 @@ class TextEmbedder:
             raise ValueError("Batch completed but no output file available")
 
         # Download results
-        result_content = await self.client.files.content(batch.output_file_id)
+        result_content = self.client.files.content(batch.output_file_id)
 
         embeddings = {}
         for line in result_content.text.strip().split("\n"):

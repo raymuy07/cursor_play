@@ -37,20 +37,19 @@ class CompanyManager:
 
         return ["comeet.com"]
 
-    @property
-    def publish_stale_companies(self) -> list[dict]:
+    ##TODO: we are posting to an async rabbit mq but our function is not async
+    async def publish_stale_companies(self) -> None:
         """Select companies to scrape and publish them to the company_queue."""
-        max_age_hours = self.config.get("max_age_hours")
+        max_age_hours = self.config.get("max_age_hours", 24)
         companies = self.companies_db.get_stale_companies(max_age_hours)
         if not companies:
             logger.info("No companies require scraping at this time.")
             return
         logger.info(f"Preparing to scrape {len(companies)} company pages")
         for company in companies:
-            self.company_queue.publish(company)
+            await self.company_queue.publish(company)
 
-    @property
-    def search_for_companies(self) -> list[dict]:
+    async def search_for_companies(self) -> None:
         """Search for companies on the web."""
         domains = self.get_domains_to_search()
 

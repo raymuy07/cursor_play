@@ -310,24 +310,23 @@ class CompaniesDB:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def get_stale_companies(self, db: aiosqlite.Connection, max_age_hours: int) -> list[dict]:
+    def get_stale_companies(self, max_age_hours: int) -> list[dict]:
         """Get companies not scraped within max_age_hours.
+        thats not async because we use it in the scheduler. once an hour with threads.
 
-        Args:
-            db: Async database connection
-            max_age_hours: Maximum age in hours since last scrape
         """
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            """
-            SELECT * FROM companies
-            WHERE is_active = 1
-            AND (last_scraped IS NULL OR last_scraped < datetime('now', '-' || ? || ' hours'))
-            ORDER BY last_scraped ASC NULLS FIRST
-            """,
-            (max_age_hours,),
-        ) as cursor:
-            rows = await cursor.fetchall()
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM companies
+                WHERE is_active = 1
+                AND (last_scraped IS NULL OR last_scraped < datetime('now', '-' || ? || ' hours'))
+                ORDER BY last_scraped ASC NULLS FIRST
+                """,
+                (max_age_hours,),
+            )
+            rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
     async def get_all_companies(

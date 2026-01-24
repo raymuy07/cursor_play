@@ -15,7 +15,7 @@ dependencies = [
     "python-dotenv",
     "openai",
     "python-telegram-bot",
-    "APScheduler",
+    "apscheduler",
     "PyPDF2",
     "python-docx",
     "numpy",
