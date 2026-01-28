@@ -196,7 +196,7 @@ class TestJobQueue:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
-            await queue.publish_batch(jobs, source_url)
+            await queue.publish_jobs_from_url(jobs, source_url)
 
             # Verify message body contains jobs and source_url
             call_args = mock_message_class.call_args
@@ -224,7 +224,7 @@ class TestJobQueue:
             mock_message_class.return_value = mock_message
 
             # Should not raise TypeError due to default=str in json.dumps
-            await queue.publish_batch(jobs, source_url)
+            await queue.publish_jobs_from_url(jobs, source_url)
 
             call_args = mock_message_class.call_args
             body = json.loads(call_args.kwargs["body"].decode())
@@ -325,7 +325,7 @@ class TestMessageQueueIntegration:
         test_source = "https://example.com/careers"
 
         # Publish batch
-        await job_queue.publish_batch(test_jobs, test_source)
+        await job_queue.publish_jobs_from_url(test_jobs, test_source)
 
         # Consume (with timeout)
         received_jobs = None

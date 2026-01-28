@@ -149,7 +149,7 @@ class TestPipelineIntegration:
                 if jobs:
                     scraped_jobs.extend(jobs)
                     publish_start = time.perf_counter()
-                    await job_queue.publish_batch(jobs, company["company_page_url"])
+                    await job_queue.publish_jobs_from_url(jobs, company["company_page_url"])
                     metrics["timings"]["2_publish_jobs"] = time.perf_counter() - publish_start
                     logger.info(f"📤 [Step 2] Scraped {len(jobs)} jobs, published to jobs_queue")
             raise asyncio.CancelledError()

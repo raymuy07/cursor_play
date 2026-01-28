@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
+from typing import Any
 
 import aio_pika
 
@@ -10,6 +14,14 @@ logger = logging.getLogger(__name__)
 # Queue names
 COMPANIES_QUEUE = "companies_to_scrape"
 JOBS_QUEUE = "jobs_to_persist"
+
+
+@dataclass
+class QueueItem:
+    """Wraps a message with its data and ack/nack callbacks."""
+
+    data: dict
+    message: aio_pika.IncomingMessage
 
 
 class RabbitMQConnection:
@@ -68,10 +80,31 @@ class CompanyQueue(BaseQueue):
         await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.debug(f"Queued company: {company.get('company_name')}")
 
-    async def consume(self, callback: callable[[dict], None], prefetch: int = 10):
+    async def feed_queue(
+        self,
+        internal_queue: asyncio.Queue[QueueItem],
+        prefetch: int = 10,
+    ):
         """
-        Consume companies from queue.
-        Callback should be an async function.
+        Feed messages from RabbitMQ into an internal asyncio.Queue.
+        This allows workers to process messages concurrently.
+        Messages are NOT auto-acked - workers must call message.ack() after processing.
+        """
+        await self._ensure_connected()
+        await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
+
+        queue = await self.rabbitmq.channel.get_queue(self.queue_name)
+
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                company = json.loads(message.body.decode())
+                item = QueueItem(data=company, message=message)
+                await internal_queue.put(item)
+
+    async def consume(self, callback: Callable[[dict], Coroutine[Any, Any, None]], prefetch: int = 10):
+        """
+        Consume companies from queue sequentially (legacy method).
+        For concurrent processing, use ScraperCoordinator instead.
         """
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
@@ -86,8 +119,6 @@ class CompanyQueue(BaseQueue):
                         await callback(company)
                     except Exception as e:
                         logger.error(f"Error processing company: {e}")
-                        # message.process() context manager will handle nack if exception is raised
-                        # but we might want to log it specifically.
                         raise
 
 
@@ -97,7 +128,7 @@ class JobQueue(BaseQueue):
     def __init__(self, rabbitmq: RabbitMQConnection):
         super().__init__(rabbitmq, JOBS_QUEUE)
 
-    async def publish_batch(self, jobs: list, source_url: str):
+    async def publish_jobs_from_url(self, jobs: list, source_url: str):
         """Push a batch of jobs to the persist queue."""
         await self._ensure_connected()
         payload = {"jobs": jobs, "source_url": source_url}
