@@ -5,6 +5,7 @@ import logging
 
 from app.common.utils import setup_logging
 from app.core.scrape_coordinator import ScraperCoordinator
+from app.services.db_utils import JobsDB
 from app.services.message_queue import RabbitMQConnection
 
 logger = logging.getLogger("app.workers")
@@ -20,11 +21,9 @@ async def main():
     """Entry point for the job scraper service."""
 
     rabbitmq = RabbitMQConnection()
-    coordinator = ScraperCoordinator(
-        rabbitmq=rabbitmq,
-        num_workers=5,
-        prefetch=10,
-    )
+    db = JobsDB()
+
+    coordinator = ScraperCoordinator(rabbitmq=rabbitmq, num_workers=5, prefetch=10, db=db)
 
     try:
         await coordinator.run()

@@ -26,7 +26,6 @@ async def fetch_html_from_url(url: str, client: httpx.AsyncClient) -> str | None
         "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
-        "Connection": "close",
     }
 
     logger.debug(f"Fetching URL: {url}")
@@ -36,9 +35,12 @@ async def fetch_html_from_url(url: str, client: httpx.AsyncClient) -> str | None
         logger.debug(f"Fetched {url} - status: {resp.status_code}, length: {len(resp.text)} chars")
         return resp.text
 
-    except Exception as e:
-        logger.error(f"Failed to fetch {url}: {e}")
-        raise  # Let the queue handle the retry
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error {e.response.status_code} for {url}")
+        raise
+    except httpx.RequestError as e:
+        logger.error(f"Request failed for {url}: {e}")
+        raise
 
 
 class JobScraper:

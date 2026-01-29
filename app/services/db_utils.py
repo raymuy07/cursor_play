@@ -650,6 +650,21 @@ class JobsDB:
             logger.error(f"Error updating embedding for job ID {job_id}: {e}", exc_info=True)
             return False
 
+
+    async def filter_existing_jobs(self, jobs: list[dict], db: aiosqlite.Connection) -> list[dict]:
+        """Return only jobs that don't exist in DB yet."""
+        # Generate hashes for all jobs
+        url_hashes = [generate_url_hash(job["url"]) for job in jobs if job.get("url")]
+
+        placeholders = ",".join("?" * len(url_hashes))
+        query = f"SELECT url_hash FROM jobs WHERE url_hash IN ({placeholders})"
+        cursor = await db.execute(query, url_hashes)
+        existing = {row[0] for row in await cursor.fetchall()}
+
+        # Filter out existing
+        new_jobs = [j for j in jobs if generate_url_hash(j.get("url")) not in existing]
+        return new_jobs
+
     async def get_jobs_without_embeddings(self, db: aiosqlite.Connection, limit: int | None = None) -> list[dict]:
         """
         Get jobs that don't have embeddings yet.

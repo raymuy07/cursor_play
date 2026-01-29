@@ -4,8 +4,12 @@ import asyncio
 import logging
 import random
 
+import aiosqlite
 import httpx
+
+from app.common.models import validate_jobs
 from app.core.scraper import JobScraper, fetch_html_from_url
+from app.services.db_utils import JobsDB
 from app.services.message_queue import CompanyQueue, JobQueue, QueueItem, RabbitMQConnection
 
 logger = logging.getLogger("app.core")
@@ -26,8 +30,10 @@ class ScraperCoordinator:
         rabbitmq: RabbitMQConnection,
         num_workers: int = 5,
         prefetch: int = 10,
+        jobs_db: JobsDB | None = None,
     ):
         self.rabbitmq = rabbitmq
+        self.jobs_db = jobs_db or JobsDB()
         self.num_workers = num_workers
         self.prefetch = prefetch
 
@@ -35,6 +41,9 @@ class ScraperCoordinator:
         self.todo: asyncio.Queue[QueueItem] = asyncio.Queue()
         self.total_processed = 0
         self.total_failed = 0
+
+        # Database connection (opened in run())
+        self._db_connection: aiosqlite.Connection | None = None
 
     async def run(self):
         """Main entry point - start workers and process companies."""
@@ -46,29 +55,34 @@ class ScraperCoordinator:
         job_queue = JobQueue(self.rabbitmq)
         company_queue = CompanyQueue(self.rabbitmq)
 
-        async with httpx.AsyncClient() as client:
-            # Start worker tasks
-            workers = [asyncio.create_task(self.worker(job_queue, client)) for _ in range(self.num_workers)]
-            logger.info(f"Started {len(workers)} worker tasks")
+        # Open database connection for the lifetime of the coordinator
+        async with aiosqlite.connect(self.jobs_db.db_path) as db:
+            self._db_connection = db
 
-            # Start feeder task - pulls from RabbitMQ into internal queue
-            feeder = asyncio.create_task(company_queue.feed_queue(self.todo, prefetch=self.prefetch))
-            logger.info("Started feeder task, waiting for messages...")
+            async with httpx.AsyncClient() as client:
+                workers = [asyncio.create_task(self.worker(job_queue, client)) for _ in range(self.num_workers)]
+                logger.info(f"Started {len(workers)} worker tasks")
 
-            # Wait for feeder to complete (runs until cancelled or queue empty)
-            try:
-                await feeder
-            except asyncio.CancelledError:
-                logger.info("Feeder cancelled")
+                # Start feeder task - pulls from RabbitMQ into internal queue
+                feeder = asyncio.create_task(company_queue.feed_queue(self.todo, prefetch=self.prefetch))
+                logger.info("Started feeder task, waiting for messages...")
 
-            # Wait for all queued items to be processed
-            await self.todo.join()
+                # Wait for feeder to complete (runs until cancelled or queue empty)
+                try:
+                    await feeder
+                except asyncio.CancelledError:
+                    logger.info("Feeder cancelled")
 
-            # Cancel workers
-            for worker in workers:
-                worker.cancel()
+                # Wait for all queued items to be processed
+                await self.todo.join()
 
-            logger.info(f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}")
+                # Cancel workers
+                for worker in workers:
+                    worker.cancel()
+
+                logger.info(
+                    f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}"
+                )
 
     async def worker(self, job_queue: JobQueue, client: httpx.AsyncClient):
         """Worker task that processes companies from the internal queue."""
@@ -111,9 +125,7 @@ class ScraperCoordinator:
                 break  # Success, exit retry loop
             except Exception as e:
                 if attempt < max_retries:
-                    logger.warning(
-                        f"Attempt {attempt}/{max_retries} failed for {company_name}: {e}. Retrying ..."
-                    )
+                    logger.warning(f"Attempt {attempt}/{max_retries} failed for {company_name}: {e}. Retrying ...")
                     await asyncio.sleep(random.randint(1, 2))
                 else:
                     logger.error(f"GIVING UP on {company_name} after {max_retries} failed attempts: {e}")
@@ -124,12 +136,27 @@ class ScraperCoordinator:
 
         if html:
             scraper = JobScraper(html)
-            jobs = scraper.extract_jobs()
-            if jobs:
-                logger.info(f"Found {len(jobs)} jobs for {company_name}")
-                await job_queue.publish_jobs_from_url(jobs, url)
+            raw_jobs = scraper.extract_jobs()
+
+            # Step 1: Validate jobs with Pydantic
+            valid_jobs, invalid_jobs = validate_jobs(raw_jobs)
+            if invalid_jobs:
+                logger.debug(f"Filtered out {len(invalid_jobs)} invalid jobs for {company_name}")
+
+            if not valid_jobs:
+                logger.warning(f"No valid jobs extracted for {company_name} at {url}")
+                return True
+
+            # Step 2: Filter out jobs that already exist in DB
+            new_jobs = await self.jobs_db.filter_existing_jobs(valid_jobs, self._db_connection)
+
+            if new_jobs:
+                logger.info(
+                    f"Found {len(new_jobs)} new jobs for {company_name} (filtered {len(valid_jobs) - len(new_jobs)} existing)"
+                )
+                await job_queue.publish_jobs_from_url(new_jobs, url)
             else:
-                logger.warning(f"No jobs found for {company_name} at {url}")
+                logger.info(f"No new jobs for {company_name} - all {len(valid_jobs)} jobs already exist")
             return True
         else:
             logger.warning(f"No HTML content retrieved for {company_name}")
