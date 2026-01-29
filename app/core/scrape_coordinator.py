@@ -111,11 +111,10 @@ class ScraperCoordinator:
                 break  # Success, exit retry loop
             except Exception as e:
                 if attempt < max_retries:
-                    wait_time = random.randint(1, 3)
                     logger.warning(
-                        f"Attempt {attempt}/{max_retries} failed for {company_name}: {e}. Retrying in {wait_time}s..."
+                        f"Attempt {attempt}/{max_retries} failed for {company_name}: {e}. Retrying ..."
                     )
-                    await asyncio.sleep(wait_time)
+                    await asyncio.sleep(random.randint(1, 2))
                 else:
                     logger.error(f"GIVING UP on {company_name} after {max_retries} failed attempts: {e}")
                     return False

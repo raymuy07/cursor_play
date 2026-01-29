@@ -1,15 +1,41 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
-import requests
+import httpx
 
 from app.common.utils import load_config
 from app.services.db_utils import CompaniesDB
 from app.services.message_queue import CompanyQueue
 
+
+##TODO Change it to the proper module.
 logger = logging.getLogger(__name__)
+
+
+###TODO:
+# class Company(Base):
+#     __tablename__ = "companies"
+#     id = Column(Integer, primary_key=True)
+#     company_name = Column(String, nullable=False)
+#     company_page_url = Column(String, unique=True)
+#     last_scraped = Column(DateTime)
+#     # ...
+
+
+DOMAIN_QUERIES = {
+    # Domain-specific search templates
+    "comeet.com": 'site:comeet.com intitle:"jobs at"',
+    "lever.co": "site:jobs.lever.co -inurl:/job-",
+    ## "greenhouse.io": 'site:boards.greenhouse.io OR site:greenhouse.io intitle:"jobs"',
+}
+
+URL_PATTERNS = {
+    "comeet.com": "https://www.comeet.com/jobs/{company_name}/{company_id}",
+    "lever.co": "https://jobs.lever.co/{company_name}",
+}
 
 
 class CompanyManager:
@@ -49,65 +75,44 @@ class CompanyManager:
         for company in companies:
             await self.company_queue.publish(company)
 
-    async def search_for_companies(self) -> None:
-        """Search for companies on the web."""
-        domains = self.get_domains_to_search()
+    async def search_companies_in_domain(self, domain: str) -> None:
+        """Search for companies in a domain."""
 
         serper_api_key = self.config["serper_api_key"]
+        headers = {"X-API-KEY": serper_api_key, "Content-Type": "application/json"}
 
-        # Get domain-specific template or use default
-        domain_templates = self.config["google_dork"]["domain_templates"]
+        query = DOMAIN_QUERIES[domain]
+        logger.info(f"Searching for companies in {domain} with query {query}")
+        async with httpx.AsyncClient() as client:
+            tasks = [self.fetch_companies_from_page(query, page, headers, client, domain) for page in range(1, 51)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        new_companies_count = 0
-        total_results_count = 0  # Track total results across all pages
+        total_new = sum(res for res in results if isinstance(res, int))
+        logger.info(f"Finished domain {domain}. Found {total_new} new companies.")
 
-        for domain in domains:
-            if domain not in domain_templates:
-                logger.error(f"No specific template for {domain}")
-                continue
+    async def fetch_companies_from_page(
+        self, query: str, page: int, headers: dict, client: httpx.AsyncClient, domain: str
+    ) -> None:
+        """Fetch companies from a page."""
 
-            query = domain_templates[domain]["query_template"]
+        # Prepare Serper API request
+        url = "https://google.serper.dev/search"
+        payload = json.dumps([{"q": query, "page": page}])
 
-            for page in range(1, 51):  ##51 is the max pages i can allow.
-                try:
-                    # Prepare Serper API request
-                    url = "https://google.serper.dev/search"
+        # Make API request
+        response = await client.post(url, headers=headers, data=payload, timeout=30)
+        response.raise_for_status()
+        await asyncio.sleep(0.5)
 
-                    payload = json.dumps([{"q": query, "page": page}])
+        # Parse response
+        search_results = response.json()[0]
 
-                    headers = {"X-API-KEY": serper_api_key, "Content-Type": "application/json"}
+        if not search_results or "organic" not in search_results:
+            logger.warning(f"No organic results found for page {page}")
+            return 0
 
-                    # Make API request
-                    response = requests.post(url, headers=headers, data=payload, timeout=30)
-                    response.raise_for_status()
-
-                    # Parse response
-                    search_results = response.json()
-                    search_results = search_results[0]
-
-                    if not search_results or "organic" not in search_results:
-                        logger.warning(f"No organic results found for {domain} page {page}")
-                        break
-
-                    # Count results from this page
-                    page_results_count = len(search_results.get("organic", []))
-                    total_results_count += page_results_count
-
-                    # Process search results and insert into database
-                    page_new_count = self._process_search_results(search_results["organic"], domain)
-                    new_companies_count += page_new_count
-
-                    # If we got fewer than 10 results, we've likely reached the end
-                    if len(search_results["organic"]) < 10:
-                        logger.info(f"Reached end of results for {domain} at page {page}")
-                        break
-
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"API request failed for {domain} page {page}: {e}")
-                    break
-                except Exception as e:
-                    logger.error(f"Error processing {domain} page {page}: {e}")
-                    break
+        new_companies_count = self._process_search_results(search_results["organic"], domain)
+        return new_companies_count
 
     def _process_search_results(self, organic_results: list[dict], domain: str) -> int:
         """Process search results, extract company info, and insert into database."""
@@ -205,5 +210,3 @@ if __name__ == "__main__":
     company_queue = CompanyQueue()
     company_manager = CompanyManager(companies_db, config, company_queue)
 
-    ##For now the company manager is being initialized but I still need to figure out the timings.
-    ##cause we got publishing and we also have searching.
