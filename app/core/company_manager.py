@@ -6,10 +6,8 @@ import logging
 
 import httpx
 
-from app.common.utils import load_config
 from app.services.db_utils import CompaniesDB
 from app.services.message_queue import CompanyQueue
-
 
 ##TODO Change it to the proper module.
 logger = logging.getLogger(__name__)
@@ -75,44 +73,74 @@ class CompanyManager:
         for company in companies:
             await self.company_queue.publish(company)
 
-    async def search_companies_in_domain(self, domain: str) -> None:
-        """Search for companies in a domain."""
+    async def search_for_companies(self) -> None:
+        """Search all supported domains for new companies. Called by scheduler weekly."""
+        domains = self.get_domains_to_search()
+        for domain in domains:
+            await self.search_companies_in_domain(domain)
 
+    async def search_companies_in_domain(self, domain: str) -> None:
+        """Search for companies in a domain with rate-limited concurrent requests."""
         serper_api_key = self.config["serper_api_key"]
         headers = {"X-API-KEY": serper_api_key, "Content-Type": "application/json"}
-
         query = DOMAIN_QUERIES[domain]
-        logger.info(f"Searching for companies in {domain} with query {query}")
+
+        logger.info(f"Searching for companies in {domain} with query: {query}")
+
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
         async with httpx.AsyncClient() as client:
-            tasks = [self.fetch_companies_from_page(query, page, headers, client, domain) for page in range(1, 51)]
+            tasks = [
+                self._fetch_page_with_semaphore(semaphore, query, page, headers, client, domain)
+                for page in range(1, 51)
+            ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Log any exceptions that occurred
+        for i, res in enumerate(results):
+            if isinstance(res, Exception):
+                logger.error(f"Page {i + 1} failed: {res}")
 
         total_new = sum(res for res in results if isinstance(res, int))
         logger.info(f"Finished domain {domain}. Found {total_new} new companies.")
 
-    async def fetch_companies_from_page(
-        self, query: str, page: int, headers: dict, client: httpx.AsyncClient, domain: str
-    ) -> None:
-        """Fetch companies from a page."""
+    async def _fetch_page_with_semaphore(
+        self,
+        semaphore: asyncio.Semaphore,
+        query: str,
+        page: int,
+        headers: dict,
+        client: httpx.AsyncClient,
+        domain: str,
+    ) -> int:
+        """Wrapper that enforces rate limiting via semaphore."""
+        async with semaphore:
+            return await self._fetch_companies_from_page(query, page, headers, client, domain)
 
-        # Prepare Serper API request
+    async def _fetch_companies_from_page(
+        self, query: str, page: int, headers: dict, client: httpx.AsyncClient, domain: str
+    ) -> int:
+        """Fetch companies from a single page. Returns count of new companies found."""
         url = "https://google.serper.dev/search"
         payload = json.dumps([{"q": query, "page": page}])
 
-        # Make API request
-        response = await client.post(url, headers=headers, data=payload, timeout=30)
-        response.raise_for_status()
-        await asyncio.sleep(0.5)
+        try:
+            response = await client.post(url, headers=headers, data=payload, timeout=30)
+            response.raise_for_status()
 
-        # Parse response
-        search_results = response.json()[0]
+            search_results = response.json()[0]
 
-        if not search_results or "organic" not in search_results:
-            logger.warning(f"No organic results found for page {page}")
+            if not search_results or "organic" not in search_results:
+                logger.debug(f"No organic results found for page {page}")
+                return 0
+
+            return self._process_search_results(search_results["organic"], domain)
+
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"HTTP error on page {page}: {e.response.status_code}")
             return 0
-
-        new_companies_count = self._process_search_results(search_results["organic"], domain)
-        return new_companies_count
+        except Exception as e:
+            logger.error(f"Error fetching page {page}: {e}")
+            return 0
 
     def _process_search_results(self, organic_results: list[dict], domain: str) -> int:
         """Process search results, extract company info, and insert into database."""
@@ -202,11 +230,3 @@ class CompanyManager:
             return url
         except Exception:
             return url
-
-
-if __name__ == "__main__":
-    companies_db = CompaniesDB()
-    config = load_config()
-    company_queue = CompanyQueue()
-    company_manager = CompanyManager(companies_db, config, company_queue)
-
