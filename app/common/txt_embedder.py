@@ -6,7 +6,7 @@ import tempfile
 
 from openai import AsyncOpenAI
 
-from common.utils import load_config
+from app.common.utils import load_config
 
 logger = logging.getLogger(__name__)
 

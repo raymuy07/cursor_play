@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from scripts.db_utils import generate_url_hash
-from scripts.job_filter_embedder import JobFilter
+from app.services.db_utils import generate_url_hash
+from app.services.job_filter_embedder import JobFilter
 
 
 def test_generate_url_hash_is_deterministic():

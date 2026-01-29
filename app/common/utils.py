@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Utility Functions
-Common helper functions used across scripts
+app.common helper functions used across app.services
 """
 
 import json

@@ -5,9 +5,9 @@ import logging
 
 import requests
 
-from common.utils import load_config
-from scripts.db_utils import CompaniesDB
-from scripts.message_queue import CompanyQueue
+from app.common.utils import load_config
+from app.services.db_utils import CompaniesDB
+from app.services.message_queue import CompanyQueue
 
 logger = logging.getLogger(__name__)
 

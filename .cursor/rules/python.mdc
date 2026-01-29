@@ -6,6 +6,6 @@ alwaysApply: false
 - Follow PEP 8 style guidelines
 - Use type hints where applicable
 - Prefer SQLite for data persistence
-- Call `setup_logging()` once at entry point; use `logger = logging.getLogger(__name__)` at module level
+- Call `setup_logging()` once at entry point; use centralized loggers per major component (e.g., `logging.getLogger("app.core")`, `logging.getLogger("app.workers")`) rather than per-module loggers
 - Always add `from __future__ import annotations` at the top of each file (enables modern type hints like `list`, `dict`, `callable` without importing from `typing`)
 - Use ruff for linting/formatting

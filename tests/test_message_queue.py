@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scripts.message_queue import (
+from app.services.message_queue import (
     COMPANIES_QUEUE,
     JOBS_QUEUE,
     BaseQueue,
@@ -35,7 +35,7 @@ class TestRabbitMQConnection:
         mock_channel = AsyncMock()
         mock_channel.is_closed = False
 
-        with patch("scripts.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             mock_connect.return_value = mock_connection
             mock_connection.channel.return_value = mock_channel
 
@@ -59,7 +59,7 @@ class TestRabbitMQConnection:
         rabbitmq.connection = mock_connection
         rabbitmq.channel = mock_channel
 
-        with patch("scripts.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             await rabbitmq.connect()
             mock_connect.assert_not_called()
 
@@ -109,7 +109,7 @@ class TestCompanyQueue:
             "company_page_url": "https://jobs.lever.co/testcorp",
         }
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -192,7 +192,7 @@ class TestJobQueue:
         ]
         source_url = "https://example.com/careers"
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -219,7 +219,7 @@ class TestJobQueue:
         jobs = [{"title": "Engineer", "posted_at": datetime(2025, 1, 10)}]
         source_url = "https://example.com/careers"
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 

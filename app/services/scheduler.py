@@ -7,12 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from common.txt_embedder import TextEmbedder
-from common.utils import load_config, setup_logging
-from scripts.company_manager import CompanyManager
-from scripts.db_utils import CompaniesDB, JobsDB, PendingEmbeddedDB
-from scripts.job_persister import JobPersister
-from scripts.message_queue import CompanyQueue, RabbitMQConnection
+from app.common.txt_embedder import TextEmbedder
+from app.common.utils import load_config, setup_logging
+from app.services.company_manager import CompanyManager
+from app.services.db_utils import CompaniesDB, JobsDB, PendingEmbeddedDB
+from app.services.job_persister import JobPersister
+from app.services.message_queue import CompanyQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
 

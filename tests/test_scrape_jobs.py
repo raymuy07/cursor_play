@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.job_scraper import JobScraper
+from app.services.job_scraper import JobScraper
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

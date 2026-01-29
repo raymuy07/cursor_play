@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import random
@@ -9,11 +8,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from common.utils import setup_logging
-from scripts.message_queue import CompanyQueue, JobQueue, QueueItem, RabbitMQConnection
-
-logger = logging.getLogger(__name__)
-
+logger = logging.getLogger("app.core")
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -22,130 +17,28 @@ USER_AGENTS = [
 ]
 
 
-class ScraperCoordinator:
-    """
-    Coordinates concurrent scraping of companies from the RabbitMQ queue.
+async def fetch_html_from_url(url: str, client: httpx.AsyncClient) -> str | None:
+    """Fetch HTML content for a given URL using requests."""
+    """I think this is a key function cause we may encounter problems with fetching html on a proxy"""
 
-    Uses the worker pattern:
-    - A feeder task pulls messages from RabbitMQ into an internal asyncio.Queue
-    - Multiple workers concurrently process items from the internal queue
-    - Messages are acked/nacked based on processing success
-    """
+    user_agent = random.choice(USER_AGENTS)
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Connection": "close",
+    }
 
-    def __init__(
-        self,
-        rabbitmq: RabbitMQConnection,
-        num_workers: int = 5,
-        prefetch: int = 10,
-    ):
-        self.rabbitmq = rabbitmq
-        self.num_workers = num_workers
-        self.prefetch = prefetch
+    logger.debug(f"Fetching URL: {url}")
+    try:
+        resp = await client.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()  # This raises an error for 500s, 403s, etc.
+        logger.debug(f"Fetched {url} - status: {resp.status_code}, length: {len(resp.text)} chars")
+        return resp.text
 
-        # Internal queue for concurrent processing
-        self.todo: asyncio.Queue[QueueItem] = asyncio.Queue()
-        self.total_processed = 0
-        self.total_failed = 0
-
-    async def run(self):
-        """Main entry point - start workers and process companies."""
-        logger.info(f"Starting ScraperCoordinator with {self.num_workers} workers")
-
-        await self.rabbitmq.connect()
-        logger.info("Connected to RabbitMQ")
-
-        job_queue = JobQueue(self.rabbitmq)
-        company_queue = CompanyQueue(self.rabbitmq)
-
-        async with httpx.AsyncClient() as client:
-            # Start worker tasks
-            workers = [asyncio.create_task(self.worker(job_queue, client)) for _ in range(self.num_workers)]
-            logger.info(f"Started {len(workers)} worker tasks")
-
-            # Start feeder task - pulls from RabbitMQ into internal queue
-            feeder = asyncio.create_task(company_queue.feed_queue(self.todo, prefetch=self.prefetch))
-            logger.info("Started feeder task, waiting for messages...")
-
-            # Wait for feeder to complete (runs until cancelled or queue empty)
-            try:
-                await feeder
-            except asyncio.CancelledError:
-                logger.info("Feeder cancelled")
-
-            # Wait for all queued items to be processed
-            await self.todo.join()
-
-            # Cancel workers
-            for worker in workers:
-                worker.cancel()
-
-            logger.info(f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}")
-
-    async def worker(self, job_queue: JobQueue, client: httpx.AsyncClient):
-        """Worker task that processes companies from the internal queue."""
-        while True:
-            try:
-                await self.process_one(job_queue, client)
-            except asyncio.CancelledError:
-                return
-
-    async def process_one(self, job_queue: JobQueue, client: httpx.AsyncClient):
-        """Process a single company from the queue."""
-        item = await self.todo.get()
-        try:
-            success = await self.scrape_company(item.data, job_queue, client)
-            if success:
-                self.total_processed += 1
-            else:
-                self.total_failed += 1
-        finally:
-            # Always ack - we either succeeded or gave up after retries
-            await item.message.ack()
-            self.todo.task_done()
-
-    async def scrape_company(
-        self, company: dict, job_queue: JobQueue, client: httpx.AsyncClient, max_retries: int = 3
-    ) -> bool:
-        """
-        Scrape a company and publish jobs to the job queue.
-        Returns True on success, False if all retries failed.
-        """
-        company_name = company.get("company_name", "Unknown")
-        url = company.get("company_page_url")
-        logger.debug(f"Processing company: {company_name} | URL: {url}")
-
-        # Retry loop for fetching HTML
-        html = None
-        for attempt in range(1, max_retries + 1):
-            try:
-                html = await fetch_html_from_url(url, client=client)
-                break  # Success, exit retry loop
-            except Exception as e:
-                if attempt < max_retries:
-                    wait_time = random.randint(1, 3)
-                    logger.warning(
-                        f"Attempt {attempt}/{max_retries} failed for {company_name}: {e}. Retrying in {wait_time}s..."
-                    )
-                    await asyncio.sleep(wait_time)
-                else:
-                    logger.error(f"GIVING UP on {company_name} after {max_retries} failed attempts: {e}")
-                    return False
-
-        # Rate limit between successful requests too
-        await asyncio.sleep(random.randint(1, 3))
-
-        if html:
-            scraper = JobScraper(html)
-            jobs = scraper.extract_jobs()
-            if jobs:
-                logger.info(f"Found {len(jobs)} jobs for {company_name}")
-                await job_queue.publish_jobs_from_url(jobs, url)
-            else:
-                logger.warning(f"No jobs found for {company_name} at {url}")
-            return True
-        else:
-            logger.warning(f"No HTML content retrieved for {company_name}")
-            return False
+    except Exception as e:
+        logger.error(f"Failed to fetch {url}: {e}")
+        raise  # Let the queue handle the retry
 
 
 class JobScraper:
@@ -226,7 +119,7 @@ class JobScraper:
     def _extract_from_html_elements(self) -> list[dict]:
         """
         Extract job data from HTML elements (alternative pattern).
-        Handles multiple common patterns including Angular-based job listings.
+        Handles multiple app.common patterns including Angular-based job listings.
         """
         jobs = []
 
@@ -255,7 +148,7 @@ class JobScraper:
                     # Check if it contains location icon
                     if item.find("i", class_="fa-map-marker"):
                         location = text
-                    # Check for common employment type keywords
+                    # Check for app.common employment type keywords
                     elif any(
                         keyword in text.lower()
                         for keyword in ["full-time", "part-time", "contract", "temporary", "freelance"]
@@ -381,48 +274,3 @@ class JobScraper:
         """Extract job URL from element."""
         link = element.find("a", href=True)
         return link["href"] if link else None
-
-
-async def fetch_html_from_url(url: str, client: httpx.AsyncClient) -> str | None:
-    """Fetch HTML content for a given URL using requests."""
-    """I think this is a key function cause we may encounter problems with fetching html on a proxy"""
-
-    user_agent = random.choice(USER_AGENTS)
-    headers = {
-        "User-Agent": user_agent,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Connection": "close",
-    }
-
-    logger.debug(f"Fetching URL: {url}")
-    try:
-        resp = await client.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()  # This raises an error for 500s, 403s, etc.
-        logger.debug(f"Fetched {url} - status: {resp.status_code}, length: {len(resp.text)} chars")
-        return resp.text
-
-    except Exception as e:
-        logger.error(f"Failed to fetch {url}: {e}")
-        raise  # Let the queue handle the retry
-
-
-async def main():
-    """Entry point for the job scraper service."""
-
-    rabbitmq = RabbitMQConnection()
-    coordinator = ScraperCoordinator(
-        rabbitmq=rabbitmq,
-        num_workers=5,
-        prefetch=10,
-    )
-
-    try:
-        await coordinator.run()
-    finally:
-        await rabbitmq.close()
-
-
-if __name__ == "__main__":
-    setup_logging()
-    asyncio.run(main(), debug=True)

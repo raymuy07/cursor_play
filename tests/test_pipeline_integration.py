@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from scripts.job_filter_embedder import JobFilter
-from scripts.job_scraper import JobScraper, fetch_html_from_url
-from scripts.message_queue import CompanyQueue, JobQueue, RabbitMQConnection
+from app.services.job_filter_embedder import JobFilter
+from app.services.job_scraper import JobScraper, fetch_html_from_url
+from app.services.message_queue import CompanyQueue, JobQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class TestPipelineIntegration:
 
         RabbitMQ is REAL, OpenAI API is MOCKED.
         """
-        from common.txt_embedder import TextEmbedder
+        from app.common.txt_embedder import TextEmbedder
 
         metrics = {
             "timings": {},
@@ -299,7 +299,7 @@ async def test_embedder_api_request_structure():
 
     All OpenAI API calls are mocked, so this costs $0.
     """
-    from common.txt_embedder import TextEmbedder
+    from app.common.txt_embedder import TextEmbedder
 
     embedder = TextEmbedder()
 

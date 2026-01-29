@@ -6,9 +6,9 @@ Uses the same TextEmbedder class as CV embedding for consistency.
 
 import logging
 
-from common.txt_embedder import TextEmbedder
-from scripts.db_utils import JobsDB, PendingEmbeddedDB, get_async_db_connection
-from scripts.job_filter_embedder import JobFilter
+from app.common.txt_embedder import TextEmbedder
+from app.services.db_utils import JobsDB, PendingEmbeddedDB, get_async_db_connection
+from app.services.job_filter_embedder import JobFilter
 
 ##TODO: need to change the whole logging structure so it wont take by name, but for module.
 logger = logging.getLogger(__name__)

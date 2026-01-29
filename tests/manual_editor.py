@@ -12,7 +12,7 @@ from tkinter import messagebox, ttk
 
 # Add parent directory to path to import db_utils
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from scripts.db_utils import JOBS_DB, JobsDB, get_db_connection
+from app.services.db_utils import JOBS_DB, JobsDB, get_db_connection
 
 
 class ManualEditor:

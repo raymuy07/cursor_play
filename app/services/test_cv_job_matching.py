@@ -15,7 +15,7 @@ import os
 import pickle
 import sys
 
-from common.utils import load_config
+from app.common.utils import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +331,7 @@ def main():
 
     except FileNotFoundError as e:
         logger.warning(f"File not found: {e}")
-        logger.error("\nMake sure to run scripts/embed_cv.py first to generate CV embeddings!")
+        logger.error("\nMake sure to run app.services/embed_cv.py first to generate CV embeddings!")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Error during matching: {e}")

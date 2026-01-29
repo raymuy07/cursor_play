@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from scripts.db_utils import generate_url_hash
+from app.services.db_utils import generate_url_hash
 
 # Ensure project root is importable when tests run from the repository root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,7 +53,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers."""
-    config.addinivalue_line("markers", "integration: marks tests as integration tests (require external services)")
+    config.addinivalue_line("markers", "integration: marks tests as integration tests (require external app.services)")
 
 
 @pytest.fixture(scope="session")
@@ -80,7 +80,7 @@ def load_fixture_html() -> callable[[str], str]:
 def parse_fixture_jobs(request: pytest.FixtureRequest, load_fixture_html) -> callable[[str], list[dict]]:
     """Parse jobs from an HTML fixture and optionally persist a JSON snapshot."""
     # Lazy imports to avoid cascading import errors for unrelated tests
-    from scripts.job_scraper import JobScraper
+    from app.services.job_scraper import JobScraper
 
     update_snapshots = request.config.getoption("--update-job-snapshots")
 
@@ -120,7 +120,8 @@ def parsed_job_snapshots(parse_fixture_jobs, html_fixture_names) -> dict[str, li
 def temp_companies_db(tmp_path):
     """Provision an isolated companies.db for tests."""
     from db.schema.db_schema import get_companies_schema
-    from scripts.db_utils import CompaniesDB, initialize_database
+
+    from app.services.db_utils import CompaniesDB, initialize_database
 
     db_path = tmp_path / "companies.db"
     initialize_database(str(db_path), get_companies_schema())
@@ -131,7 +132,8 @@ def temp_companies_db(tmp_path):
 def temp_jobs_db(tmp_path):
     """Provision an isolated jobs.db for tests."""
     from db.schema.db_schema import get_jobs_schema
-    from scripts.db_utils import JobsDB, initialize_database
+
+    from app.services.db_utils import JobsDB, initialize_database
 
     db_path = tmp_path / "jobs.db"
     initialize_database(str(db_path), get_jobs_schema())

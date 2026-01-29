@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Database Utilities
-Provides connection management and common operations for SQLite databases.
+Provides connection management and app.common operations for SQLite databases.
 All database classes support async operations using aiosqlite.
 """
 
@@ -612,7 +612,7 @@ class JobsDB:
                 return cursor.lastrowid
 
         except aiosqlite.IntegrityError as e:
-            # Check if it's a URL duplicate (most common case)
+            # Check if it's a URL duplicate (most app.common case)
             error_msg = str(e).lower()
             if "url" in error_msg or "unique constraint" in error_msg:
                 # Likely a duplicate URL or hash collision

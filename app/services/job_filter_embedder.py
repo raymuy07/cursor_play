@@ -4,10 +4,10 @@ from functools import partial
 
 import aiosqlite
 
-from common.txt_embedder import TextEmbedder
-from common.utils import setup_logging
-from scripts.db_utils import PendingEmbeddedDB
-from scripts.message_queue import JobQueue, RabbitMQConnection
+from app.common.txt_embedder import TextEmbedder
+from app.common.utils import setup_logging
+from app.services.db_utils import PendingEmbeddedDB
+from app.services.message_queue import JobQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
 

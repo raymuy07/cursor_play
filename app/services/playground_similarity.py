@@ -9,10 +9,10 @@ from tkinter import filedialog, messagebox
 
 import numpy as np
 
-from common.txt_embedder import TextEmbedder
-from common.utils import load_config
-from scripts.db_utils import JobsDB
-from scripts.embed_cv import CVProcessor
+from app.common.txt_embedder import TextEmbedder
+from app.common.utils import load_config
+from app.services.db_utils import JobsDB
+from app.services.embed_cv import CVProcessor
 
 logger = logging.getLogger(__name__)
 

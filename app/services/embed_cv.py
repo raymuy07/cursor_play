@@ -10,8 +10,8 @@ from pathlib import Path
 import yaml
 from openai import OpenAI
 
-from common.txt_embedder import TextEmbedder
-from common.utils import load_config
+from app.common.txt_embedder import TextEmbedder
+from app.common.utils import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ class CVProcessor:
 
 
 if __name__ == "__main__":
-    from common.utils import setup_logging
+    from app.common.utils import setup_logging
 
     setup_logging()
 

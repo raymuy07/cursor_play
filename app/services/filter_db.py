@@ -9,7 +9,7 @@ import json
 import logging
 import os
 
-from scripts.db_utils import JOBS_DB, get_db_connection
+from app.services.db_utils import JOBS_DB, get_db_connection
 
 logger = logging.getLogger(__name__)
 

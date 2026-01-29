@@ -139,7 +139,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_from_domain ON jobs(from_domain);
 CREATE INDEX IF NOT EXISTS idx_jobs_scraped_at ON jobs(scraped_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_publish_date ON jobs(publish_date);
 
--- Composite indexes for common filter combinations
+-- Composite indexes for app.common filter combinations
 CREATE INDEX IF NOT EXISTS idx_jobs_location_workplace ON jobs(location_id, workplace_type);
 CREATE INDEX IF NOT EXISTS idx_jobs_dept_experience ON jobs(department_id, experience_level);
 
@@ -173,7 +173,7 @@ INSERT OR IGNORE INTO departments (canonical_name, category) VALUES
     ('Manufacturing', 'Operations'),
     ('Supply Chain', 'Operations');
 
--- Insert common department synonyms
+-- Insert app.common department synonyms
 INSERT OR IGNORE INTO department_synonyms (synonym, department_id)
 SELECT 'R&D', id FROM departments WHERE canonical_name = 'Research & Development'
 UNION ALL
@@ -239,7 +239,7 @@ INSERT OR IGNORE INTO locations (canonical_name, country, region) VALUES
     ('Bnei Brak', 'Israel', 'Center'),
     ('Raanana', 'Israel', 'Center');
 
--- Insert common location synonyms
+-- Insert app.common location synonyms
 INSERT OR IGNORE INTO location_synonyms (synonym, location_id)
 SELECT 'TLV', id FROM locations WHERE canonical_name = 'Tel Aviv'
 UNION ALL

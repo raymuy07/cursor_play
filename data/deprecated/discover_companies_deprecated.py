@@ -15,9 +15,10 @@ import requests
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 
-from common.utils import load_config
-from scripts.db_schema import get_companies_schema, get_search_queries_schema
-from scripts.db_utils import COMPANIES_DB, SEARCH_QUERIES_DB, CompaniesDB, SearchQueriesDB, initialize_database
+from app.services.db_schema import get_companies_schema, get_search_queries_schema
+
+from app.common.utils import load_config
+from app.services.db_utils import COMPANIES_DB, SEARCH_QUERIES_DB, CompaniesDB, SearchQueriesDB, initialize_database
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +231,7 @@ def extract_company_name_from_title(title: str, domain: str) -> str:
         # Remove domain-specific suffixes
         title_clean = title.replace(f" - {domain}", "").replace(f" | {domain}", "")
 
-        # Common patterns to extract company name
+        # app.common patterns to extract company name
         patterns = [
             "Jobs at ",  # "Jobs at Flare" -> "Flare"
             "Careers at ",  # "Careers at Tesla" -> "Tesla"
@@ -284,7 +285,7 @@ def clean_company_page_url(url: str) -> str:
 
 
 if __name__ == "__main__":
-    from common.utils import setup_logging
+    from app.common.utils import setup_logging
 
     setup_logging()
 

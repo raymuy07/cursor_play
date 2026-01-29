@@ -4,8 +4,8 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.job_filter_embedder import JobFilter
-from scripts.job_persister import JobPersister
+from app.services.job_filter_embedder import JobFilter
+from app.services.job_persister import JobPersister
 
 
 def test_companies_db_crud(temp_companies_db):
