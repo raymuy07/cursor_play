@@ -4,13 +4,12 @@ import asyncio
 import logging
 import random
 
-import aiosqlite
 import httpx
 
-from app.models.job import validate_jobs
-from app.services.scraper import JobScraper, fetch_html_from_url
 from app.core.db_utils import JobsDB
+from app.models.job import validate_jobs
 from app.services.message_queue import CompanyQueue, JobQueue, QueueItem, RabbitMQConnection
+from app.services.scraper import JobScraper, fetch_html_from_url
 
 logger = logging.getLogger("app.core")
 
@@ -42,7 +41,6 @@ class ScraperCoordinator:
         self.total_processed = 0
         self.total_failed = 0
 
-
     async def run(self):
         """Main entry point - start workers and process companies."""
         logger.info(f"Starting ScraperCoordinator with {self.num_workers} workers")
@@ -72,9 +70,7 @@ class ScraperCoordinator:
             for worker in workers:
                 worker.cancel()
 
-            logger.info(
-                f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}"
-            )
+            logger.info(f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}")
 
     async def worker(self, job_queue: JobQueue, client: httpx.AsyncClient):
         """Worker task that processes companies from the internal queue."""

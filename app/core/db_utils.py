@@ -112,7 +112,19 @@ class PendingEmbeddedDB:
 
     def __init__(self, db_path: str = PENDING_EMBEDDED_DB):
         self.db_path = db_path
+        self._conn = None
         self.initialize_database()
+
+    async def connect(self):
+        """Open async database connection."""
+        self._conn = await aiosqlite.connect(self.db_path)
+        self._conn.row_factory = aiosqlite.Row
+
+    async def close(self):
+        """Close the database connection."""
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
 
     ###TODO : remove this when we switch to alembic
     def initialize_database(self):
@@ -127,38 +139,38 @@ class PendingEmbeddedDB:
             """)
             conn.commit()
 
-    async def insert_pending_batch_id(self, db: aiosqlite.Connection, batch_id: str):
+    async def insert_pending_batch_id(self, batch_id: str):
+        """Insert a new pending batch ID."""
         try:
-            await db.execute(
+            await self._conn.execute(
                 """
                     INSERT INTO pending_batches (batch_id, status) VALUES (?, ?)
                 """,
                 (batch_id, "processing"),
             )
-            await db.commit()
+            await self._conn.commit()
             return True
         except aiosqlite.IntegrityError:
             return False
 
-    async def get_processing_batches(self, db: aiosqlite.Connection):
+    async def get_processing_batches(self):
         """Returns all batches that are currently being processed."""
         try:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM pending_batches WHERE status = 'processing'") as cursor:
+            async with self._conn.execute("SELECT * FROM pending_batches WHERE status = 'processing'") as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"Error fetching processing batches: {e}")
             return []
 
-    async def update_batch_status(self, db: aiosqlite.Connection, batch_id: str, status: str) -> bool:
+    async def update_batch_status(self, batch_id: str, status: str) -> bool:
         """Update the status of an existing batch."""
         try:
-            await db.execute(
+            await self._conn.execute(
                 "UPDATE pending_batches SET status = ? WHERE batch_id = ?",
                 (status, batch_id),
             )
-            await db.commit()
+            await self._conn.commit()
             return True
         except Exception as e:
             logger.error(f"Error updating batch {batch_id}: {e}")
@@ -191,31 +203,32 @@ class CompaniesDB:
             """)
             conn.commit()
 
-    async def insert_company(self, db: aiosqlite.Connection, company_data: dict) -> int | None:
+    def insert_company(self, company_data: dict) -> int | None:
         """Insert a new company into the database.
 
         Args:
-            db: Async database connection
             company_data: dictionary containing company information
 
         Returns:
             ID of the inserted record, or None if duplicate
         """
         try:
-            async with db.execute(
-                "INSERT INTO companies (company_name, domain, company_page_url, title, source) VALUES (?, ?, ?, ?, ?)",
-                (
-                    company_data.get("company_name"),
-                    company_data.get("domain"),
-                    company_data.get("company_page_url"),
-                    company_data.get("title"),
-                    company_data.get("source", "google_serper"),
-                ),
-            ) as cursor:
-                await db.commit()
+            with get_db_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO companies (company_name, domain, company_page_url, title, source) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        company_data.get("company_name"),
+                        company_data.get("domain"),
+                        company_data.get("company_page_url"),
+                        company_data.get("title"),
+                        company_data.get("source", "google_serper"),
+                    ),
+                )
+                conn.commit()
                 return cursor.lastrowid
 
-        except aiosqlite.IntegrityError:
+        except sqlite3.IntegrityError:
             # Duplicate company (company_page_url already exists)
             return None
 
@@ -389,7 +402,6 @@ class JobsDB:
 
     def __init__(self, db_path: str = JOBS_DB):
         self.db_path = db_path
-
 
     async def connect(self):
         self._conn = await aiosqlite.connect(self.db_path)
@@ -618,7 +630,7 @@ class JobsDB:
                     job_data.get("original_website_job_url"),
                 ),
             ) as cursor:
-                await db.commit()
+                await self._conn.commit()
                 return cursor.lastrowid
 
         except aiosqlite.IntegrityError as e:
@@ -636,7 +648,7 @@ class JobsDB:
             logger.error(f"Error inserting job with URL '{job_data.get('url')}': {e}", exc_info=True)
             return None
 
-    async def update_job_embedding(self, db: aiosqlite.Connection, job_id: int, embedding: bytes) -> bool:
+    async def update_job_embedding(self, job_id: int, embedding: bytes) -> bool:
         """
         Update the embedding for a specific job.
 
@@ -646,7 +658,7 @@ class JobsDB:
             embedding: Pickled numpy array as bytes (BLOB)
         """
         try:
-            await db.execute(
+            await self._conn.execute(
                 """
                 UPDATE jobs
                 SET embedding = ?
@@ -654,28 +666,27 @@ class JobsDB:
                 """,
                 (embedding, job_id),
             )
-            await db.commit()
+            await self._conn.commit()
             return True
         except Exception as e:
             logger.error(f"Error updating embedding for job ID {job_id}: {e}", exc_info=True)
             return False
 
-
-    async def filter_existing_jobs(self, jobs: list[dict], db: aiosqlite.Connection) -> list[dict]:
+    async def filter_existing_jobs(self, jobs: list[dict]) -> list[dict]:
         """Return only jobs that don't exist in DB yet."""
         # Generate hashes for all jobs
         url_hashes = [generate_url_hash(job["url"]) for job in jobs if job.get("url")]
 
         placeholders = ",".join("?" * len(url_hashes))
         query = f"SELECT url_hash FROM jobs WHERE url_hash IN ({placeholders})"
-        cursor = await db.execute(query, url_hashes)
+        cursor = await self._conn.execute(query, url_hashes)
         existing = {row[0] for row in await cursor.fetchall()}
 
         # Filter out existing
         new_jobs = [j for j in jobs if generate_url_hash(j.get("url")) not in existing]
         return new_jobs
 
-    async def get_jobs_without_embeddings(self, db: aiosqlite.Connection, limit: int | None = None) -> list[dict]:
+    async def get_jobs_without_embeddings(self, limit: int | None = None) -> list[dict]:
         """
         Get jobs that don't have embeddings yet.
 
@@ -684,7 +695,7 @@ class JobsDB:
             limit: Optional limit on number of results
         """
         # Ensure embedding column exists (for existing databases)
-        await self._ensure_embedding_column(db)
+        await self._ensure_embedding_column()
 
         query = """
             SELECT * FROM jobs
@@ -697,12 +708,12 @@ class JobsDB:
         if limit:
             query += f" LIMIT {limit}"
 
-        db.row_factory = aiosqlite.Row
-        async with db.execute(query) as cursor:
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute(query) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def _ensure_embedding_column(self, db: aiosqlite.Connection):
+    async def _ensure_embedding_column(self):
         """
         Ensure the embedding column exists in the jobs table.
         Adds it if missing (for existing databases that don't have it yet).
@@ -712,32 +723,32 @@ class JobsDB:
         """
         try:
             # Check if column exists by trying to select it
-            async with db.execute("PRAGMA table_info(jobs)") as cursor:
+            async with self._conn.execute("PRAGMA table_info(jobs)") as cursor:
                 rows = await cursor.fetchall()
                 columns = [row[1] for row in rows]
 
             if "embedding" not in columns:
                 logger.info("Adding embedding column to jobs table...")
-                await db.execute("ALTER TABLE jobs ADD COLUMN embedding BLOB")
-                await db.commit()
+                await self._conn.execute("ALTER TABLE jobs ADD COLUMN embedding BLOB")
+                await self._conn.commit()
                 logger.info("Embedding column added successfully")
         except Exception as e:
             # Column might already exist or table might not exist yet
             logger.debug(f"Embedding column check: {e}")
 
-    async def get_job_by_url(self, db: aiosqlite.Connection, url: str) -> dict | None:
+    async def get_job_by_url(self, url: str) -> dict | None:
         """Get a job by its URL.
 
         Args:
             db: Async database connection
             url: Job URL to search for
         """
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM jobs WHERE url = ?", (url,)) as cursor:
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
 
-    async def delete_job_by_url(self, db: aiosqlite.Connection, url: str) -> bool:
+    async def delete_job_by_url(self, url: str) -> bool:
         """Delete a job by URL, returning True when a row was removed.
 
         Args:
@@ -747,13 +758,11 @@ class JobsDB:
         if not url:
             return False
 
-        cursor = await db.execute("DELETE FROM jobs WHERE url = ?", (url,))
-        await db.commit()
+        cursor = await self._conn.execute("DELETE FROM jobs WHERE url = ?", (url,))
+        await self._conn.commit()
         return cursor.rowcount > 0
 
-    async def get_jobs_by_company(
-        self, db: aiosqlite.Connection, company_name: str, limit: int | None = None
-    ) -> list[dict]:
+    async def get_jobs_by_company(self, company_name: str, limit: int | None = None) -> list[dict]:
         """Get all jobs for a specific company.
 
         Args:
@@ -765,14 +774,13 @@ class JobsDB:
         if limit:
             query += f" LIMIT {limit}"
 
-        db.row_factory = aiosqlite.Row
-        async with db.execute(query, (company_name,)) as cursor:
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute(query, (company_name,)) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
     async def get_jobs_by_filters(
         self,
-        db: aiosqlite.Connection,
         workplace_type: str | None = None,
         experience_level: str | None = None,
         employment_type: str | None = None,
@@ -823,14 +831,13 @@ class JobsDB:
         if limit:
             query += f" LIMIT {limit}"
 
-        db.row_factory = aiosqlite.Row
-        async with db.execute(query, params) as cursor:
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
     async def count_jobs(
         self,
-        db: aiosqlite.Connection,
         workplace_type: str | None = None,
         experience_level: str | None = None,
         department_id: int | None = None,
@@ -868,16 +875,16 @@ class JobsDB:
             query += " AND location_id = ?"
             params.append(location_id)
 
-        async with db.execute(query, params) as cursor:
+        async with self._conn.execute(query, params) as cursor:
             row = await cursor.fetchone()
             return row[0]
 
-    async def get_all_departments(self, db: aiosqlite.Connection) -> list[dict]:
+    async def get_all_departments(self) -> list[dict]:
         """
         Get all departments with their synonyms.
         """
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute(
             """
             SELECT d.*, GROUP_CONCAT(ds.synonym, ', ') as synonyms
             FROM departments d
@@ -902,7 +909,7 @@ class JobsDB:
             """)
             return [dict(row) for row in cursor.fetchall()]
 
-    async def get_all_locations(self, db: aiosqlite.Connection) -> list[dict]:
+    async def get_all_locations(self) -> list[dict]:
         """
         Get all locations with their synonyms.
 
@@ -912,8 +919,8 @@ class JobsDB:
         Returns:
             list of location records
         """
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.execute(
             """
             SELECT l.*, GROUP_CONCAT(ls.synonym, ', ') as synonyms
             FROM locations l
@@ -925,7 +932,7 @@ class JobsDB:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def verify_database(self, db: aiosqlite.Connection) -> dict:
+    async def verify_database(self) -> dict:
         """
         Verify the database structure and return statistics.
 
@@ -951,13 +958,13 @@ class JobsDB:
 
         try:
             # Get all tables
-            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name") as cursor:
+            async with self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name") as cursor:
                 rows = await cursor.fetchall()
                 result["tables_exist"] = [row[0] for row in rows]
 
             # Count jobs
             try:
-                async with db.execute("SELECT COUNT(*) FROM jobs") as cursor:
+                async with self._conn.execute("SELECT COUNT(*) FROM jobs") as cursor:
                     row = await cursor.fetchone()
                     result["jobs_count"] = row[0]
             except Exception as e:
@@ -965,7 +972,7 @@ class JobsDB:
 
             # Count departments
             try:
-                async with db.execute("SELECT COUNT(*) FROM departments") as cursor:
+                async with self._conn.execute("SELECT COUNT(*) FROM departments") as cursor:
                     row = await cursor.fetchone()
                     result["departments_count"] = row[0]
             except Exception as e:
@@ -973,7 +980,7 @@ class JobsDB:
 
             # Count locations
             try:
-                async with db.execute("SELECT COUNT(*) FROM locations") as cursor:
+                async with self._conn.execute("SELECT COUNT(*) FROM locations") as cursor:
                     row = await cursor.fetchone()
                     result["locations_count"] = row[0]
             except Exception as e:
@@ -981,8 +988,8 @@ class JobsDB:
 
             # Get a sample job
             try:
-                db.row_factory = aiosqlite.Row
-                async with db.execute("SELECT * FROM jobs LIMIT 1") as cursor:
+                self._conn.row_factory = aiosqlite.Row
+                async with self._conn.execute("SELECT * FROM jobs LIMIT 1") as cursor:
                     row = await cursor.fetchone()
                     if row:
                         result["sample_job"] = dict(row)

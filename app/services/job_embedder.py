@@ -1,28 +1,18 @@
-import asyncio
 import logging
-from functools import partial
-
-import aiosqlite
 
 from app.common.txt_embedder import TextEmbedder
-from app.common.utils import setup_logging
 from app.core.db_utils import PendingEmbeddedDB
-from app.services.message_queue import JobQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
 
 
 class JobEmbedder:
-    """Handles filtering and validation of job batches."""
+    """Handles filtering, validation, and embedding of job batches."""
 
-    def __init__(self,)
-
-
-
-    def run():
-
-
-
+    def __init__(self, pending_db: PendingEmbeddedDB, text_embedder: TextEmbedder):
+        self.pending_db = pending_db
+        self.embedder = text_embedder
+        self.total_jobs_for_batch = []
 
     @staticmethod
     def is_hebrew_job(job: dict) -> bool:
@@ -100,34 +90,25 @@ class JobEmbedder:
 
         return valid_jobs, filter_counts
 
+    async def process_batch(self, jobs_data: dict):
+        """Process a batch of jobs from the queue.
 
-
-    async def filter_embedder_batch_call(jobs_data: dict, pending_embedded_db: PendingEmbeddedDB, db: aiosqlite.Connection):
-
-        """This function is called by the job queue consumer. it will filter the jobs and then embed them.
-        it gets the jobs_data dict as a batch of all the jobs that were scraped from a company."""
-
-        total_jobs_for_batch = []
+        Called by the job queue consumer. Filters jobs and submits for embedding.
+        """
         jobs = jobs_data.get("jobs", [])
         source_url = jobs_data.get("source_url", "")
 
-        ### TODO: This need to move cause we need to implemet it  with dependency injection.
-        embedder = TextEmbedder()
-        job_filter = JobEmbedder()
-
-        valid_jobs, filter_counts = job_filter.filter_valid_jobs(jobs)
+        valid_jobs, filter_counts = self.filter_valid_jobs(jobs)
 
         if valid_jobs:
-            logger.info(f"Filtered {len(valid_jobs)} jobs from {source_url}")
-            # TODO add to the text embedder a batch call
-            total_jobs_for_batch.extend(valid_jobs)
-            if len(total_jobs_for_batch) >= 500:
-                batch_id = await embedder.create_embedding_batch(total_jobs_for_batch)
-                await pending_embedded_db.insert_pending_batch_id(db, batch_id)
-                total_jobs_for_batch = []
-                #!Question is who will check the db all the time for the completed? i think the scheduler
-                ## the persister will not work as a pure consumer
+            logger.info(f"Filtered {len(valid_jobs)} jobs from {source_url} (removed: {filter_counts})")
+            self.total_jobs_for_batch.extend(valid_jobs)
+
+            # When batch is large enough, submit for embedding
+            if len(self.total_jobs_for_batch) >= 500:
+                batch_id = await self.embedder.create_embedding_batch(self.total_jobs_for_batch)
+                await self.pending_db.insert_pending_batch_id(batch_id)
+                self.total_jobs_for_batch = []
+                logger.info(f"Submitted embedding batch: {batch_id}")
         else:
             logger.warning(f"No valid jobs found from {source_url}")
-
-

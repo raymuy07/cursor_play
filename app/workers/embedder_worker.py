@@ -1,41 +1,39 @@
 import asyncio
-from app.common.utils import setup_logging
-from app.services.message_queue import RabbitMQConnection
-from app.core.db_utils import JobsDB, PendingEmbeddedDB
-
 import logging
+from functools import partial
 
+from app.common.txt_embedder import TextEmbedder
+from app.common.utils import setup_logging
+from app.core.db_utils import PendingEmbeddedDB
+from app.services.job_embedder import JobEmbedder
+from app.services.message_queue import JobQueue, RabbitMQConnection
 
 logger = logging.getLogger("app.workers")
 
-    ##and here we want to persist the batch_id into the pending embedded db (which is not yet exist)
-
-
-async def filter_consumer():
-    rabbitmq = RabbitMQConnection()
-    logger.debug(f"Connecting to RabbitMQ at {rabbitmq.host}:{rabbitmq.port}")
-    await rabbitmq.connect()
-    logger.info("Connected to RabbitMQ successfully")
-
-    job_queue = JobQueue(rabbitmq)
-    pending_db_lib = PendingEmbeddedDB()
-
-    # Open persistent connection for the life of the worker
-    async with aiosqlite.connect(pending_db_lib.db_path) as db:
-        # Pass the open connection and the library instance via partial
-        callback = partial(filter_embedder_batch_call, pending_db_lib=pending_db_lib, db=db)
-
-        logger.info("Filter consumer worker started, waiting for raw jobs...")
-        await job_queue.consume(callback, prefetch=10)
-
 
 async def main():
+    """Entry point for the embedder worker service."""
     rabbitmq = RabbitMQConnection()
-    jobs_db = JobsDB()
-    pending_db_lib = PendingEmbeddedDB()
+    pending_db = PendingEmbeddedDB()
+    text_embedder = TextEmbedder()
 
-    consumer = FilterConsumer(rabbitmq=rabbitmq, jobs_db=jobs_db, pending_db_lib=pending_db_lib)
+    # Connect to all resources
+    await rabbitmq.connect()
+    await pending_db.connect()
+    logger.info("Connected to RabbitMQ and PendingEmbeddedDB")
 
+    job_queue = JobQueue(rabbitmq)
+    embedder = JobEmbedder(pending_db=pending_db, text_embedder=text_embedder)
+
+    # Create callback with pending_db bound
+    callback = partial(embedder.process_batch)
+
+    try:
+        logger.info("Embedder worker started, waiting for jobs...")
+        await job_queue.consume(callback, prefetch=10)
+    finally:
+        await pending_db.close()
+        await rabbitmq.close()
 
 
 if __name__ == "__main__":
@@ -44,4 +42,3 @@ if __name__ == "__main__":
         asyncio.run(main(), debug=True)
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
-
