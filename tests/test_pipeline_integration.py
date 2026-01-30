@@ -1,6 +1,6 @@
 """
 End-to-end pipeline integration tests.
-Tests the full flow: CompanyManager → JobScraper → JobFilterEmbedder
+Tests the full flow: CompanyManager → JobScraper → JobEmbedderEmbedder
 
 Run with: pytest -m integration tests/test_pipeline_integration.py -v -s --log-cli-level=INFO
 Requires RabbitMQ running on localhost:5672
@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
-from app.services.job_filter_embedder import JobFilter
+from app.services.job_embedder import JobEmbedder
 from app.services.job_scraper import JobScraper, fetch_html_from_url
+
 from app.services.message_queue import CompanyQueue, JobQueue, RabbitMQConnection
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class TestPipelineIntegration:
             print(f"✅ Extracted {len(jobs)} jobs from {company['company_name']}")
 
     async def test_job_filter_filters_correctly(self, http_client):
-        """Test that JobFilter correctly filters jobs."""
+        """Test that JobEmbedder correctly filters jobs."""
         company = TEST_COMPANIES[0]
 
         html = await fetch_html_from_url(company["company_page_url"], http_client)
@@ -80,7 +80,7 @@ class TestPipelineIntegration:
         if not jobs:
             pytest.skip("No jobs to filter from test company")
 
-        valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
+        valid_jobs, filter_counts = JobEmbedder.filter_valid_jobs(jobs)
 
         # Validate filter output
         assert isinstance(valid_jobs, list)
@@ -177,13 +177,13 @@ class TestPipelineIntegration:
             mock_batch_create.return_value = MagicMock(id="batch-test456")
 
             async def filter_embed_callback(jobs_data: dict):
-                """Simulates job_filter_embedder.filter_embedder_batch_call with mocked embedder"""
+                """Simulates job_embedder.filter_embedder_batch_call with mocked embedder"""
                 jobs = jobs_data.get("jobs", [])
                 source = jobs_data.get("source_url", "")
 
                 # Filter jobs
                 filter_start = time.perf_counter()
-                valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
+                valid_jobs, filter_counts = JobEmbedder.filter_valid_jobs(jobs)
                 metrics["timings"]["3_filter_jobs"] = time.perf_counter() - filter_start
 
                 filtered_results["valid"] = valid_jobs

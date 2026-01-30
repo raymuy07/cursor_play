@@ -6,7 +6,7 @@ import logging
 
 import httpx
 
-from app.services.db_utils import CompaniesDB
+from app.core.db_utils import CompaniesDB
 from app.services.message_queue import CompanyQueue
 
 ##TODO Change it to the proper module.

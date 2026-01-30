@@ -390,6 +390,16 @@ class JobsDB:
     def __init__(self, db_path: str = JOBS_DB):
         self.db_path = db_path
 
+
+    async def connect(self):
+        self._conn = await aiosqlite.connect(self.db_path)
+        self._conn.row_factory = aiosqlite.Row
+
+    async def close(self):
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
     ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         """Initialize the jobs database with all required tables."""
@@ -460,7 +470,7 @@ class JobsDB:
             """)
             conn.commit()
 
-    async def get_department_id(self, db: aiosqlite.Connection, raw_dept: str) -> int | None:
+    async def get_department_id(self, raw_dept: str) -> int | None:
         """
         Get department ID from raw department text using synonym lookup.
         Logs a warning if department is not found.
@@ -470,7 +480,7 @@ class JobsDB:
             return None
 
         # Try exact synonym match first
-        async with db.execute(
+        async with self._conn.execute(
             """
             SELECT department_id FROM department_synonyms
             WHERE synonym = ? COLLATE NOCASE
@@ -482,7 +492,7 @@ class JobsDB:
                 return result[0]
 
         # Try partial match on canonical name
-        async with db.execute(
+        async with self._conn.execute(
             """
             SELECT id FROM departments
             WHERE canonical_name = ? COLLATE NOCASE
@@ -497,7 +507,7 @@ class JobsDB:
         logger.warning(f"Department not found in reference data: '{raw_dept.strip()}'")
         return None
 
-    async def get_location_id(self, db: aiosqlite.Connection, raw_loc: str) -> int | None:
+    async def get_location_id(self, raw_loc: str) -> int | None:
         """
         Get location ID from raw location text using synonym lookup.
         Logs a warning if location is not found.
@@ -515,7 +525,7 @@ class JobsDB:
         clean_loc = raw_loc.split(",")[0].strip()
 
         # Try exact synonym match first
-        async with db.execute(
+        async with self._conn.execute(
             """
             SELECT location_id FROM location_synonyms
             WHERE synonym = ? COLLATE NOCASE
@@ -527,7 +537,7 @@ class JobsDB:
                 return result[0]
 
         # Try partial match on canonical name
-        async with db.execute(
+        async with self._conn.execute(
             """
             SELECT id FROM locations
             WHERE canonical_name = ? COLLATE NOCASE
@@ -542,7 +552,7 @@ class JobsDB:
         logger.warning(f"Location not found in reference data: '{clean_loc}' (from '{raw_loc}')")
         return None
 
-    async def insert_job(self, job_data: dict, db: aiosqlite.Connection) -> int | None:
+    async def insert_job(self, job_data: dict) -> int | None:
         """
         Insert a new job into the database.
         Handles duplicate prevention via URL uniqueness.
@@ -558,8 +568,8 @@ class JobsDB:
                 return None
 
             # Normalize department and location
-            dept_id = await self.get_department_id(db, job_data.get("department"))
-            loc_id = await self.get_location_id(db, job_data.get("location"))
+            dept_id = await self.get_department_id(self._conn, job_data.get("department"))
+            loc_id = await self.get_location_id(self._conn, job_data.get("location"))
 
             # Handle description - convert dict to text if needed
             description = job_data.get("description", "")
@@ -576,7 +586,7 @@ class JobsDB:
 
                 from_domain = urlparse(url).netloc
 
-            async with db.execute(
+            async with self._conn.execute(
                 """
                 INSERT INTO jobs (
                     title, company_name, department, department_id,

@@ -7,7 +7,6 @@ app.common helper functions used across app.services
 import json
 import logging
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -52,26 +51,6 @@ def load_config() -> dict[str, any]:
         config["serper_api_key"] = os.getenv("SERPER_API_KEY", config["serper_api_key"])
 
     return config
-
-
-def setup_logging():
-    """Configure root logger - call once at service startup."""
-    log_config = {}
-    try:
-        config = load_config()
-        log_config = config.get("logging", {})
-    except Exception:
-        pass
-
-    root_logger = logging.getLogger()  # ROOT logger
-    root_logger.setLevel(getattr(logging, log_config.get("level", "INFO")))
-
-    ## !TODO,I defiently need to change looging structure into json.
-    if not root_logger.handlers:
-        formatter = logging.Formatter(log_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(formatter)
-        root_logger.addHandler(handler)
 
 
 def deduplicate_companies(companies: list[dict]) -> list[dict]:

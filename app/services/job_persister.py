@@ -6,9 +6,10 @@ Uses the same TextEmbedder class as CV embedding for consistency.
 
 import logging
 
+from app.services.job_embedder import JobEmbedder
+
 from app.common.txt_embedder import TextEmbedder
-from app.services.db_utils import JobsDB, PendingEmbeddedDB, get_async_db_connection
-from app.services.job_filter_embedder import JobFilter
+from app.core.db_utils import JobsDB, PendingEmbeddedDB, get_async_db_connection
 
 ##TODO: need to change the whole logging structure so it wont take by name, but for module.
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class JobPersister:
         errors = 0
 
         # Filter out invalid jobs using external filtering function
-        valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
+        valid_jobs, filter_counts = JobEmbedder.filter_valid_jobs(jobs)
         logger.info(f"Filter counts: {filter_counts}")
         # Process only valid jobs
         for job in valid_jobs:

@@ -16,7 +16,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.common.utils import setup_logging
-from app.core.scraper import JobScraper, fetch_html_from_url
+from app.services.scraper import JobScraper, fetch_html_from_url
 
 logger = logging.getLogger(__name__)
 

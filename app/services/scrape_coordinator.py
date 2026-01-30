@@ -7,9 +7,9 @@ import random
 import aiosqlite
 import httpx
 
-from app.common.models import validate_jobs
-from app.core.scraper import JobScraper, fetch_html_from_url
-from app.services.db_utils import JobsDB
+from app.models.job import validate_jobs
+from app.services.scraper import JobScraper, fetch_html_from_url
+from app.core.db_utils import JobsDB
 from app.services.message_queue import CompanyQueue, JobQueue, QueueItem, RabbitMQConnection
 
 logger = logging.getLogger("app.core")
@@ -28,12 +28,12 @@ class ScraperCoordinator:
     def __init__(
         self,
         rabbitmq: RabbitMQConnection,
+        jobs_db: JobsDB,
         num_workers: int = 5,
         prefetch: int = 10,
-        jobs_db: JobsDB | None = None,
     ):
         self.rabbitmq = rabbitmq
-        self.jobs_db = jobs_db or JobsDB()
+        self.jobs_db = jobs_db
         self.num_workers = num_workers
         self.prefetch = prefetch
 
@@ -42,47 +42,39 @@ class ScraperCoordinator:
         self.total_processed = 0
         self.total_failed = 0
 
-        # Database connection (opened in run())
-        self._db_connection: aiosqlite.Connection | None = None
 
     async def run(self):
         """Main entry point - start workers and process companies."""
         logger.info(f"Starting ScraperCoordinator with {self.num_workers} workers")
 
-        await self.rabbitmq.connect()
-        logger.info("Connected to RabbitMQ")
-
         job_queue = JobQueue(self.rabbitmq)
         company_queue = CompanyQueue(self.rabbitmq)
 
         # Open database connection for the lifetime of the coordinator
-        async with aiosqlite.connect(self.jobs_db.db_path) as db:
-            self._db_connection = db
+        async with httpx.AsyncClient() as client:
+            workers = [asyncio.create_task(self.worker(job_queue, client)) for _ in range(self.num_workers)]
+            logger.info(f"Started {len(workers)} worker tasks")
 
-            async with httpx.AsyncClient() as client:
-                workers = [asyncio.create_task(self.worker(job_queue, client)) for _ in range(self.num_workers)]
-                logger.info(f"Started {len(workers)} worker tasks")
+            # Start feeder task - pulls from RabbitMQ into internal queue
+            feeder = asyncio.create_task(company_queue.feed_queue(self.todo, prefetch=self.prefetch))
+            logger.info("Started feeder task, waiting for messages...")
 
-                # Start feeder task - pulls from RabbitMQ into internal queue
-                feeder = asyncio.create_task(company_queue.feed_queue(self.todo, prefetch=self.prefetch))
-                logger.info("Started feeder task, waiting for messages...")
+            # Wait for feeder to complete (runs until cancelled or queue empty)
+            try:
+                await feeder
+            except asyncio.CancelledError:
+                logger.info("Feeder cancelled")
 
-                # Wait for feeder to complete (runs until cancelled or queue empty)
-                try:
-                    await feeder
-                except asyncio.CancelledError:
-                    logger.info("Feeder cancelled")
+            # Wait for all queued items to be processed
+            await self.todo.join()
 
-                # Wait for all queued items to be processed
-                await self.todo.join()
+            # Cancel workers
+            for worker in workers:
+                worker.cancel()
 
-                # Cancel workers
-                for worker in workers:
-                    worker.cancel()
-
-                logger.info(
-                    f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}"
-                )
+            logger.info(
+                f"ScraperCoordinator finished. Processed: {self.total_processed}, Failed: {self.total_failed}"
+            )
 
     async def worker(self, job_queue: JobQueue, client: httpx.AsyncClient):
         """Worker task that processes companies from the internal queue."""
@@ -148,7 +140,7 @@ class ScraperCoordinator:
                 return True
 
             # Step 2: Filter out jobs that already exist in DB
-            new_jobs = await self.jobs_db.filter_existing_jobs(valid_jobs, self._db_connection)
+            new_jobs = await self.jobs_db.filter_existing_jobs(valid_jobs)
 
             if new_jobs:
                 logger.info(
