@@ -115,17 +115,6 @@ class PendingEmbeddedDB:
         self._conn = None
         self.initialize_database()
 
-    async def connect(self):
-        """Open async database connection."""
-        self._conn = await aiosqlite.connect(self.db_path)
-        self._conn.row_factory = aiosqlite.Row
-
-    async def close(self):
-        """Close the database connection."""
-        if self._conn:
-            await self._conn.close()
-            self._conn = None
-
     ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         with get_db_connection(self.db_path) as conn:
@@ -178,7 +167,7 @@ class PendingEmbeddedDB:
 
 
 class CompaniesDB:
-    """Interface for companies.db operations - supports both sync and async"""
+    """Interface for companies.db operations - fully sync with per-operation connections."""
 
     def __init__(self, db_path: str = COMPANIES_DB):
         self.db_path = db_path
@@ -204,14 +193,7 @@ class CompaniesDB:
             conn.commit()
 
     def insert_company(self, company_data: dict) -> int | None:
-        """Insert a new company into the database.
-
-        Args:
-            company_data: dictionary containing company information
-
-        Returns:
-            ID of the inserted record, or None if duplicate
-        """
+        """Insert a new company into the database."""
         try:
             with get_db_connection(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -227,89 +209,65 @@ class CompaniesDB:
                 )
                 conn.commit()
                 return cursor.lastrowid
-
         except sqlite3.IntegrityError:
-            # Duplicate company (company_page_url already exists)
             return None
 
-    async def update_last_scraped(self, db: aiosqlite.Connection, company_page_url: str) -> bool:
-        """Update the last_scraped timestamp for a company.
+    def update_last_scraped(self, company_page_url: str) -> bool:
+        """Update the last_scraped timestamp for a company."""
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE companies
+                SET last_scraped = CURRENT_TIMESTAMP
+                WHERE company_page_url = ?
+                """,
+                (company_page_url,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
-        Args:
-            db: Async database connection
-            company_page_url: URL of the company page
-        """
-        cursor = await db.execute(
-            """
-            UPDATE companies
-            SET last_scraped = CURRENT_TIMESTAMP
-            WHERE company_page_url = ?
-            """,
-            (company_page_url,),
-        )
-        await db.commit()
-        return cursor.rowcount > 0
+    def mark_company_inactive(self, company_page_url: str) -> bool:
+        """Mark a company as inactive (page no longer available)."""
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE companies
+                SET is_active = 0
+                WHERE company_page_url = ?
+                """,
+                (company_page_url,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
-    async def mark_company_inactive(self, db: aiosqlite.Connection, company_page_url: str) -> bool:
-        """Mark a company as inactive (page no longer available).
-
-        Args:
-            db: Async database connection
-            company_page_url: URL of the company page
-        """
-        cursor = await db.execute(
-            """
-            UPDATE companies
-            SET is_active = 0
-            WHERE company_page_url = ?
-            """,
-            (company_page_url,),
-        )
-        await db.commit()
-        return cursor.rowcount > 0
-
-    async def delete_company_by_url(self, db: aiosqlite.Connection, company_page_url: str) -> bool:
-        """Permanently delete a company record by its job page URL.
-
-        Args:
-            db: Async database connection
-            company_page_url: URL of the company page to delete
-        """
+    def delete_company_by_url(self, company_page_url: str) -> bool:
+        """Permanently delete a company record by its job page URL."""
         if not company_page_url:
             return False
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM companies WHERE company_page_url = ?",
+                (company_page_url,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
-        cursor = await db.execute(
-            "DELETE FROM companies WHERE company_page_url = ?",
-            (company_page_url,),
-        )
-        await db.commit()
-        return cursor.rowcount > 0
-
-    async def get_company_by_url(self, db: aiosqlite.Connection, company_page_url: str) -> dict | None:
-        """Get a company by its job page URL.
-
-        Args:
-            db: Async database connection
-            company_page_url: URL of the company page
-        """
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM companies WHERE company_page_url = ?", (company_page_url,)) as cursor:
-            row = await cursor.fetchone()
+    def get_company_by_url(self, company_page_url: str) -> dict | None:
+        """Get a company by its job page URL."""
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM companies WHERE company_page_url = ?",
+                (company_page_url,),
+            )
+            row = cursor.fetchone()
             return dict(row) if row else None
 
-    async def get_companies_by_domain(
-        self, db: aiosqlite.Connection, domain: str, active_only: bool = True
-    ) -> list[dict]:
-        """Get all companies for a specific domain.
-
-        Args:
-            db: Async database connection
-            domain: Domain to filter by (e.g., 'comeet', 'lever')
-            active_only: If True, only return active companies
-
-        Returns:
-            list of company records as dictionaries
-        """
+    def get_companies_by_domain(self, domain: str, active_only: bool = True) -> list[dict]:
+        """Get all companies for a specific domain."""
         query = "SELECT * FROM companies WHERE domain = ?"
         params = [domain]
 
@@ -318,16 +276,14 @@ class CompaniesDB:
 
         query += " ORDER BY discovered_at DESC"
 
-        db.row_factory = aiosqlite.Row
-        async with db.execute(query, params) as cursor:
-            rows = await cursor.fetchall()
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
     def get_stale_companies(self, max_age_hours: int) -> list[dict]:
-        """Get companies not scraped within max_age_hours.
-        thats not async because we use it in the scheduler. once an hour with threads.
-
-        """
+        """Get companies not scraped within max_age_hours."""
         with get_db_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -342,19 +298,8 @@ class CompaniesDB:
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def get_all_companies(
-        self, db: aiosqlite.Connection, active_only: bool = True, limit: int | None = None
-    ) -> list[dict]:
-        """Get all companies.
-
-        Args:
-            db: Async database connection
-            active_only: If True, only return active companies
-            limit: Optional limit on number of results
-
-        Returns:
-            list of company records as dictionaries
-        """
+    def get_all_companies(self, active_only: bool = True, limit: int | None = None) -> list[dict]:
+        """Get all companies."""
         query = "SELECT * FROM companies"
         if active_only:
             query += " WHERE is_active = 1"
@@ -364,24 +309,14 @@ class CompaniesDB:
         if limit:
             query += f" LIMIT {limit}"
 
-        db.row_factory = aiosqlite.Row
-        async with db.execute(query) as cursor:
-            rows = await cursor.fetchall()
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def count_companies(
-        self, db: aiosqlite.Connection, domain: str | None = None, active_only: bool = True
-    ) -> int:
-        """Count total number of companies.
-
-        Args:
-            db: Async database connection
-            domain: Optional domain filter
-            active_only: If True, count only active companies
-
-        Returns:
-            Number of companies
-        """
+    def count_companies(self, domain: str | None = None, active_only: bool = True) -> int:
+        """Count total number of companies."""
         query = "SELECT COUNT(*) FROM companies WHERE 1=1"
         params = []
 
@@ -392,8 +327,10 @@ class CompaniesDB:
             query += " AND domain = ?"
             params.append(domain)
 
-        async with db.execute(query, params) as cursor:
-            row = await cursor.fetchone()
+        with get_db_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            row = cursor.fetchone()
             return row[0]
 
 
