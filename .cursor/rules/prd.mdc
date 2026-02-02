@@ -62,8 +62,8 @@
 # Key Files
 - `scripts/queue.py` - RabbitMQ connection, CompanyQueue, JobQueue
 - `scripts/company_manager.py` - Company discovery & queue publishing
-- `scripts/scrape_jobs.py` - Async scraper worker, job parsing
-- `scripts/embed_jobs.py` - Batch embedding worker
+- `scripts/job_scraper.py` - Async scraper worker, job parsing
+- `scripts/job_filter_embedder.py` - Filtering the jobs and Batch embedding worker
 - `scripts/db_utils.py` - CompaniesDB, JobsDB (SQLite)
 
 # Architecture Decisions

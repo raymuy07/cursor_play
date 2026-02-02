@@ -1,34 +1,22 @@
 from __future__ import annotations
 
-from copy import deepcopy
+from app.services.db_utils import generate_url_hash
 
-import pytest
-
-from scripts.job_filter_parser import JobFilter, JobPersister
+from app.services.job_filter import JobFilter
 
 
 def test_generate_url_hash_is_deterministic():
     url = "https://example.com/jobs/12345"
-    assert JobPersister.generate_url_hash(url) == JobPersister.generate_url_hash(url)
+    assert generate_url_hash(url) == generate_url_hash(url)
 
 
 def test_generate_url_hash_varies_with_input():
     base = "https://example.com/job"
-    assert JobPersister.generate_url_hash(base + "?a=1") != JobPersister.generate_url_hash(base + "?a=2")
+    assert generate_url_hash(base + "?a=1") != generate_url_hash(base + "?a=2")
 
 
-def test_add_hash_to_jobs_populates_url_hash():
-    jobs = [{"title": "Test", "url": "https://example.com/jobs/abc"}]
-    result = JobPersister.add_hash_to_jobs(deepcopy(jobs))
-    assert result is not None
-    assert result[0]["url_hash"] == JobPersister.generate_url_hash(jobs[0]["url"])
-
-
-def test_add_hash_to_jobs_handles_missing_url():
-    jobs = [{"title": "No URL"}]
-    result = JobPersister.add_hash_to_jobs(deepcopy(jobs))
-    assert "url_hash" in result[0]
-    assert result[0]["url_hash"] == ""
+def test_generate_url_hash_handles_empty_url():
+    assert generate_url_hash("") == ""
 
 
 def test_is_hebrew_job_detects_hebrew_text():
@@ -69,5 +57,3 @@ def test_filter_valid_jobs_filters_hebrew_and_general_jobs():
     assert valid_jobs[0]["title"] == "Software Engineer"
     assert filter_counts["general_department"] == 1
     assert filter_counts["hebrew"] == 1
-
-

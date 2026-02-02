@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scripts.message_queue import (
+from app.services.message_queue import (
     COMPANIES_QUEUE,
     JOBS_QUEUE,
     BaseQueue,
@@ -17,7 +16,6 @@ from scripts.message_queue import (
     JobQueue,
     RabbitMQConnection,
 )
-
 
 # -----------------------------------------------------------------------------
 # Unit Tests (mocked, no real RabbitMQ required)
@@ -37,7 +35,7 @@ class TestRabbitMQConnection:
         mock_channel = AsyncMock()
         mock_channel.is_closed = False
 
-        with patch("scripts.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             mock_connect.return_value = mock_connection
             mock_connection.channel.return_value = mock_channel
 
@@ -61,7 +59,7 @@ class TestRabbitMQConnection:
         rabbitmq.connection = mock_connection
         rabbitmq.channel = mock_channel
 
-        with patch("scripts.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             await rabbitmq.connect()
             mock_connect.assert_not_called()
 
@@ -108,10 +106,10 @@ class TestCompanyQueue:
         company = {
             "company_name": "Test Corp",
             "domain": "lever",
-            "job_page_url": "https://jobs.lever.co/testcorp",
+            "company_page_url": "https://jobs.lever.co/testcorp",
         }
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -133,9 +131,9 @@ class TestCompanyQueue:
         queue = CompanyQueue(mock_rabbitmq)
 
         company_data = {"company_name": "Test Corp", "domain": "lever"}
-        received_companies: List[Dict] = []
+        received_companies: list[dict] = []
 
-        async def callback(company: Dict):
+        async def callback(company: dict):
             received_companies.append(company)
 
         # Create mock message
@@ -158,7 +156,7 @@ class TestCompanyQueue:
         # We need to break out of the infinite consume loop after processing one message
         call_count = 0
 
-        async def limited_callback(company: Dict):
+        async def limited_callback(company: dict):
             nonlocal call_count
             call_count += 1
             received_companies.append(company)
@@ -194,11 +192,11 @@ class TestJobQueue:
         ]
         source_url = "https://example.com/careers"
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
-            await queue.publish_batch(jobs, source_url)
+            await queue.publish_jobs_from_url(jobs, source_url)
 
             # Verify message body contains jobs and source_url
             call_args = mock_message_class.call_args
@@ -221,12 +219,12 @@ class TestJobQueue:
         jobs = [{"title": "Engineer", "posted_at": datetime(2025, 1, 10)}]
         source_url = "https://example.com/careers"
 
-        with patch("scripts.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
             # Should not raise TypeError due to default=str in json.dumps
-            await queue.publish_batch(jobs, source_url)
+            await queue.publish_jobs_from_url(jobs, source_url)
 
             call_args = mock_message_class.call_args
             body = json.loads(call_args.kwargs["body"].decode())
@@ -293,7 +291,7 @@ class TestMessageQueueIntegration:
         test_company = {
             "company_name": "Integration Test Corp",
             "domain": "comeet",
-            "job_page_url": "https://jobs.comeet.co/integration-test",
+            "company_page_url": "https://jobs.comeet.co/integration-test",
         }
 
         # Publish
@@ -302,16 +300,13 @@ class TestMessageQueueIntegration:
         # Consume (with timeout)
         received = None
 
-        async def capture_company(company: Dict):
+        async def capture_company(company: dict):
             nonlocal received
             received = company
             raise asyncio.CancelledError()  # Break out of consume loop
 
         try:
-            await asyncio.wait_for(
-                company_queue.consume(capture_company, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(company_queue.consume(capture_company, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
@@ -330,7 +325,7 @@ class TestMessageQueueIntegration:
         test_source = "https://example.com/careers"
 
         # Publish batch
-        await job_queue.publish_batch(test_jobs, test_source)
+        await job_queue.publish_jobs_from_url(test_jobs, test_source)
 
         # Consume (with timeout)
         received_jobs = None
@@ -343,10 +338,7 @@ class TestMessageQueueIntegration:
             raise asyncio.CancelledError()
 
         try:
-            await asyncio.wait_for(
-                job_queue.consume(capture_jobs, prefetch=1),
-                timeout=5.0
-            )
+            await asyncio.wait_for(job_queue.consume(capture_jobs, prefetch=1), timeout=5.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 

@@ -4,14 +4,15 @@ from copy import deepcopy
 
 import pytest
 
-from scripts.job_filter_parser import JobFilter, JobPersister
+from app.services.job_filter import JobFilter
+from app.services.job_persister import JobPersister
 
 
 def test_companies_db_crud(temp_companies_db):
     company_data = {
         "company_name": "Example Co",
         "domain": "comeet",
-        "job_page_url": "https://example.com/jobs",
+        "company_page_url": "https://example.com/jobs",
         "title": "Jobs at Example Co",
         "source": "unit-test",
     }
@@ -22,18 +23,18 @@ def test_companies_db_crud(temp_companies_db):
     duplicate_id = temp_companies_db.insert_company(company_data)
     assert duplicate_id is None
 
-    assert temp_companies_db.update_last_scraped(company_data["job_page_url"]) is True
-    stored = temp_companies_db.get_company_by_url(company_data["job_page_url"])
+    assert temp_companies_db.update_last_scraped(company_data["company_page_url"]) is True
+    stored = temp_companies_db.get_company_by_url(company_data["company_page_url"])
     assert stored is not None
     assert stored["last_scraped"] is not None
 
-    assert temp_companies_db.mark_company_inactive(company_data["job_page_url"]) is True
-    stored = temp_companies_db.get_company_by_url(company_data["job_page_url"])
+    assert temp_companies_db.mark_company_inactive(company_data["company_page_url"]) is True
+    stored = temp_companies_db.get_company_by_url(company_data["company_page_url"])
     assert stored["is_active"] == 0
 
-    assert temp_companies_db.delete_company_by_url(company_data["job_page_url"]) is True
-    assert temp_companies_db.get_company_by_url(company_data["job_page_url"]) is None
-    assert temp_companies_db.delete_company_by_url(company_data["job_page_url"]) is False
+    assert temp_companies_db.delete_company_by_url(company_data["company_page_url"]) is True
+    assert temp_companies_db.get_company_by_url(company_data["company_page_url"]) is None
+    assert temp_companies_db.delete_company_by_url(company_data["company_page_url"]) is False
 
 
 def test_jobs_db_insert_duplicate_delete(temp_jobs_db):
@@ -76,17 +77,11 @@ def test_save_jobs_flow_with_html_fixtures(temp_jobs_db, parse_fixture_jobs, htm
 
     valid_jobs, filter_counts = JobFilter.filter_valid_jobs(deepcopy(parsed_jobs))
 
-    success, inserted, skipped = JobPersister.save_jobs_to_db(
-        deepcopy(parsed_jobs), temp_jobs_db
-    )
+    success, inserted, skipped = JobPersister.save_jobs_to_db(deepcopy(parsed_jobs), temp_jobs_db)
 
     assert inserted + skipped == len(valid_jobs)
     assert temp_jobs_db.count_jobs() == inserted
 
-    success_again, inserted_again, skipped_again = JobPersister.save_jobs_to_db(
-        deepcopy(parsed_jobs), temp_jobs_db
-    )
+    success_again, inserted_again, skipped_again = JobPersister.save_jobs_to_db(deepcopy(parsed_jobs), temp_jobs_db)
     assert inserted_again == 0
     assert skipped_again == len(valid_jobs)
-
-

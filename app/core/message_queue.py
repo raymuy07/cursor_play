@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
-from typing import Dict, Optional, Callable, Any
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
+from typing import Any
+
 import aio_pika
 
 logger = logging.getLogger(__name__)
@@ -9,22 +15,28 @@ logger = logging.getLogger(__name__)
 COMPANIES_QUEUE = "companies_to_scrape"
 JOBS_QUEUE = "jobs_to_persist"
 
+
+@dataclass
+class QueueItem:
+    """Wraps a message with its data and ack/nack callbacks."""
+
+    data: dict
+    message: aio_pika.IncomingMessage
+
+
 class RabbitMQConnection:
     """Manages RabbitMQ connection and channel lifecycle using aio-pika."""
 
     def __init__(self, host: str = "localhost", port: int = 5672):
         self.host = host
         self.port = port
-        self.connection: Optional[aio_pika.RobustConnection] = None
-        self.channel: Optional[aio_pika.RobustChannel] = None
+        self.connection: aio_pika.RobustConnection | None = None
+        self.channel: aio_pika.RobustChannel | None = None
 
     async def connect(self):
         """Establish a robust connection and channel."""
         if not self.connection or self.connection.is_closed:
-            self.connection = await aio_pika.connect_robust(
-                host=self.host,
-                port=self.port
-            )
+            self.connection = await aio_pika.connect_robust(host=self.host, port=self.port)
 
         if not self.channel or self.channel.is_closed:
             self.channel = await self.connection.channel()
@@ -42,8 +54,10 @@ class RabbitMQConnection:
         if self.connection:
             await self.connection.close()
 
+
 class BaseQueue:
     """Base class for RabbitMQ queues."""
+
     def __init__(self, rabbitmq: RabbitMQConnection, queue_name: str):
         self.rabbitmq = rabbitmq
         self.queue_name = queue_name
@@ -52,29 +66,29 @@ class BaseQueue:
         if not self.rabbitmq.channel or self.rabbitmq.channel.is_closed:
             await self.rabbitmq.connect()
 
+
 class CompanyQueue(BaseQueue):
     """Producer/Consumer for company scraping queue."""
 
     def __init__(self, rabbitmq: RabbitMQConnection):
         super().__init__(rabbitmq, COMPANIES_QUEUE)
 
-    async def publish(self, company: Dict):
+    async def publish(self, company: dict):
         """Push a company to the scrape queue."""
         await self._ensure_connected()
-        message = aio_pika.Message(
-            body=json.dumps(company).encode(),
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-        )
-        await self.rabbitmq.channel.default_exchange.publish(
-            message,
-            routing_key=self.queue_name
-        )
+        message = aio_pika.Message(body=json.dumps(company).encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT)
+        await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.debug(f"Queued company: {company.get('company_name')}")
 
-    async def consume(self, callback: Callable[[Dict], Any], prefetch: int = 10):
+    async def feed_queue(
+        self,
+        internal_queue: asyncio.Queue[QueueItem],
+        prefetch: int = 10,
+    ):
         """
-        Consume companies from queue.
-        Callback should be an async function.
+        Feed messages from RabbitMQ into an internal asyncio.Queue.
+        This allows workers to process messages concurrently.
+        Messages are NOT auto-acked - workers must call message.ack() after processing.
         """
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
@@ -83,15 +97,10 @@ class CompanyQueue(BaseQueue):
 
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
-                async with message.process():
-                    company = json.loads(message.body.decode())
-                    try:
-                        await callback(company)
-                    except Exception as e:
-                        logger.error(f"Error processing company: {e}")
-                        # message.process() context manager will handle nack if exception is raised
-                        # but we might want to log it specifically.
-                        raise
+                company = json.loads(message.body.decode())
+                item = QueueItem(data=company, message=message)
+                await internal_queue.put(item)
+
 
 class JobQueue(BaseQueue):
     """Producer/Consumer for job persistence queue."""
@@ -99,22 +108,18 @@ class JobQueue(BaseQueue):
     def __init__(self, rabbitmq: RabbitMQConnection):
         super().__init__(rabbitmq, JOBS_QUEUE)
 
-    async def publish_batch(self, jobs: list, source_url: str):
+    async def publish_jobs_from_url(self, jobs: list, source_url: str):
         """Push a batch of jobs to the persist queue."""
         await self._ensure_connected()
         payload = {"jobs": jobs, "source_url": source_url}
         message = aio_pika.Message(
-            body=json.dumps(payload, default=str).encode(),
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            body=json.dumps(payload, default=str).encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
-        await self.rabbitmq.channel.default_exchange.publish(
-            message,
-            routing_key=self.queue_name
-        )
+        await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.info(f"Queued {len(jobs)} jobs from {source_url}")
 
-    async def consume(self, callback: Callable[[list, str], Any], prefetch: int = 1):
-        """Consume job batches from queue."""
+    async def consume(self, callback: Callable[[dict], Coroutine[Any, Any, None]], prefetch: int = 5):
+        """Consume job batches from queue (runs forever)."""
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
 
@@ -123,9 +128,42 @@ class JobQueue(BaseQueue):
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    data = json.loads(message.body.decode())
+                    jobs_data = json.loads(message.body.decode())
                     try:
-                        await callback(data["jobs"], data["source_url"])
+                        await callback(jobs_data)
                     except Exception as e:
                         logger.error(f"Error persisting jobs: {e}")
                         raise
+
+    async def drain_all(self, timeout_seconds: float = 5.0) -> list[dict]:
+        await self._ensure_connected()
+        queue = await self.rabbitmq.channel.get_queue(self.queue_name)
+
+        all_jobs: list[dict] = []
+
+        while True:
+            try:
+                # Try to get a message with timeout
+                message = await asyncio.wait_for(
+                    queue.get(timeout=timeout_seconds),
+                    timeout=timeout_seconds + 1
+                )
+                if message is None:
+                    break
+
+                async with message.process():
+                    jobs_data = json.loads(message.body.decode())
+                    jobs = jobs_data.get("jobs", [])
+                    source_url = jobs_data.get("source_url", "unknown")
+                    all_jobs.extend(jobs)
+                    logger.debug(f"Drained {len(jobs)} jobs from {source_url}")
+
+            except asyncio.TimeoutError:
+                # No more messages in queue
+                logger.info(f"Queue drained: {len(all_jobs)} total jobs collected")
+                break
+            except Exception as e:
+                logger.error(f"Error draining queue: {e}")
+                break
+
+        return all_jobs

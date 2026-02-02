@@ -5,14 +5,12 @@ from pathlib import Path
 
 import pytest
 
-
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "parsed_snapshots"
 
 
 def test_html_fixtures_parse(parse_fixture_jobs, html_fixture_names):
     """Ensure every HTML sample produces at least one structured job.
     Basic test to guarantee that the scraper didn't break."""
-
 
     for name in html_fixture_names:
         jobs = parse_fixture_jobs(name)
@@ -45,8 +43,5 @@ def test_parsed_jobs_match_snapshots(parse_fixture_jobs, html_fixture_names):
     if missing_snapshots:
         formatted = ", ".join(str(path) for path in missing_snapshots)
         pytest.skip(
-            "Missing parsed job snapshots: "
-            f"{formatted}. Run pytest --update-job-snapshots to generate them for review."
+            f"Missing parsed job snapshots: {formatted}. Run pytest --update-job-snapshots to generate them for review."
         )
-
-

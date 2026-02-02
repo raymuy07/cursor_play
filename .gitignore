@@ -72,3 +72,6 @@ Thumbs.db
 test-results/
 playwright-report/
 playwright/.cache/
+
+
+/cv_files/
