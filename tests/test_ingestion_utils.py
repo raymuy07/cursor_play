@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.services.job_embedder import JobEmbedder
-
 from app.services.db_utils import generate_url_hash
+
+from app.services.job_filter import JobFilter
 
 
 def test_generate_url_hash_is_deterministic():
@@ -22,8 +22,8 @@ def test_generate_url_hash_handles_empty_url():
 def test_is_hebrew_job_detects_hebrew_text():
     hebrew_job = {"title": "מהנדס תוכנה", "description": "משרה"}
     english_job = {"title": "Software Engineer", "description": "English"}
-    assert JobEmbedder.is_hebrew_job(hebrew_job) is True
-    assert JobEmbedder.is_hebrew_job(english_job) is False
+    assert JobFilter.is_hebrew_job(hebrew_job) is True
+    assert JobFilter.is_hebrew_job(english_job) is False
 
 
 def test_filter_valid_jobs_filters_hebrew_and_general_jobs():
@@ -51,7 +51,7 @@ def test_filter_valid_jobs_filters_hebrew_and_general_jobs():
         },
     ]
 
-    valid_jobs, filter_counts = JobEmbedder.filter_valid_jobs(jobs)
+    valid_jobs, filter_counts = JobFilter.filter_valid_jobs(jobs)
 
     assert len(valid_jobs) == 1
     assert valid_jobs[0]["title"] == "Software Engineer"

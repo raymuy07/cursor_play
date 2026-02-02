@@ -115,6 +115,24 @@ class PendingEmbeddedDB:
         self._conn = None
         self.initialize_database()
 
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close()
+
+    async def connect(self):
+        """Connect to the database."""
+        self._conn = await aiosqlite.connect(self.db_path)
+        self._conn.row_factory = aiosqlite.Row
+
+    async def close(self):
+        """Close the database connection."""
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
     ###TODO : remove this when we switch to alembic
     def initialize_database(self):
         with get_db_connection(self.db_path) as conn:
@@ -129,12 +147,10 @@ class PendingEmbeddedDB:
             conn.commit()
 
     async def insert_pending_batch_id(self, batch_id: str):
-        """Insert a new pending batch ID."""
+        """Insert a new pending batch ID (jobs are already in jobs.db)."""
         try:
             await self._conn.execute(
-                """
-                    INSERT INTO pending_batches (batch_id, status) VALUES (?, ?)
-                """,
+                "INSERT INTO pending_batches (batch_id, status) VALUES (?, ?)",
                 (batch_id, "processing"),
             )
             await self._conn.commit()
@@ -501,13 +517,15 @@ class JobsDB:
         logger.warning(f"Location not found in reference data: '{clean_loc}' (from '{raw_loc}')")
         return None
 
-    async def insert_job(self, job_data: dict) -> int | None:
+    async def insert_job(self, job_data: dict) -> str | None:
         """
         Insert a new job into the database.
         Handles duplicate prevention via URL uniqueness.
         Automatically normalizes departments and locations.
 
-        Jobs will be inserted in batches if we want we can write additional sync method for testing
+        Returns:
+            url_hash of the inserted job (for use as custom_id in embedding batch),
+            or None if insertion failed (duplicate or error).
         """
         try:
             # Validate required fields
@@ -535,6 +553,9 @@ class JobsDB:
 
                 from_domain = urlparse(url).netloc
 
+            # Handle embedding - should be bytes (pickled) or None
+            embedding = job_data.get("embedding")
+
             async with self._conn.execute(
                 """
                 INSERT INTO jobs (
@@ -542,9 +563,9 @@ class JobsDB:
                     location, location_id, workplace_type, experience_level,
                     employment_type, publish_date, description, uid,
                     url, url_hash, from_domain, email, is_ai_inferred,
-                    original_website_job_url
+                    original_website_job_url, embedding
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_data.get("title"),
@@ -565,10 +586,11 @@ class JobsDB:
                     job_data.get("email"),
                     job_data.get("is_ai_inferred", False),
                     job_data.get("original_website_job_url"),
+                    embedding,
                 ),
-            ) as cursor:
+            ):
                 await self._conn.commit()
-                return cursor.lastrowid
+                return url_hash  # Return url_hash for use as custom_id in embedding batch
 
         except aiosqlite.IntegrityError as e:
             # Check if it's a URL duplicate (most app.common case)
@@ -585,13 +607,12 @@ class JobsDB:
             logger.error(f"Error inserting job with URL '{job_data.get('url')}': {e}", exc_info=True)
             return None
 
-    async def update_job_embedding(self, job_id: int, embedding: bytes) -> bool:
+    async def update_job_embedding(self, url_hash: str, embedding: bytes) -> bool:
         """
         Update the embedding for a specific job.
 
         Args:
-            db: Async database connection
-            job_id: ID of the job to update
+            url_hash: URL hash of the job to update (used as custom_id in batch)
             embedding: Pickled numpy array as bytes (BLOB)
         """
         try:
@@ -599,14 +620,14 @@ class JobsDB:
                 """
                 UPDATE jobs
                 SET embedding = ?
-                WHERE id = ?
+                WHERE url_hash = ?
                 """,
-                (embedding, job_id),
+                (embedding, url_hash),
             )
             await self._conn.commit()
             return True
         except Exception as e:
-            logger.error(f"Error updating embedding for job ID {job_id}: {e}", exc_info=True)
+            logger.error(f"Error updating embedding for url_hash {url_hash}: {e}", exc_info=True)
             return False
 
     async def filter_existing_jobs(self, jobs: list[dict]) -> list[dict]:

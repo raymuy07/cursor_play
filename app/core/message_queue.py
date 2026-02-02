@@ -101,26 +101,6 @@ class CompanyQueue(BaseQueue):
                 item = QueueItem(data=company, message=message)
                 await internal_queue.put(item)
 
-    async def consume(self, callback: Callable[[dict], Coroutine[Any, Any, None]], prefetch: int = 10):
-        """
-        Consume companies from queue sequentially (legacy method).
-        For concurrent processing, use ScraperCoordinator instead.
-        """
-        await self._ensure_connected()
-        await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
-
-        queue = await self.rabbitmq.channel.get_queue(self.queue_name)
-
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                async with message.process():
-                    company = json.loads(message.body.decode())
-                    try:
-                        await callback(company)
-                    except Exception as e:
-                        logger.error(f"Error processing company: {e}")
-                        raise
-
 
 class JobQueue(BaseQueue):
     """Producer/Consumer for job persistence queue."""
@@ -138,8 +118,8 @@ class JobQueue(BaseQueue):
         await self.rabbitmq.channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.info(f"Queued {len(jobs)} jobs from {source_url}")
 
-    async def consume(self, callback: callable[[dict], None], prefetch: int = 1):
-        """Consume job batches from queue."""
+    async def consume(self, callback: Callable[[dict], Coroutine[Any, Any, None]], prefetch: int = 5):
+        """Consume job batches from queue (runs forever)."""
         await self._ensure_connected()
         await self.rabbitmq.channel.set_qos(prefetch_count=prefetch)
 
@@ -154,3 +134,36 @@ class JobQueue(BaseQueue):
                     except Exception as e:
                         logger.error(f"Error persisting jobs: {e}")
                         raise
+
+    async def drain_all(self, timeout_seconds: float = 5.0) -> list[dict]:
+        await self._ensure_connected()
+        queue = await self.rabbitmq.channel.get_queue(self.queue_name)
+
+        all_jobs: list[dict] = []
+
+        while True:
+            try:
+                # Try to get a message with timeout
+                message = await asyncio.wait_for(
+                    queue.get(timeout=timeout_seconds),
+                    timeout=timeout_seconds + 1
+                )
+                if message is None:
+                    break
+
+                async with message.process():
+                    jobs_data = json.loads(message.body.decode())
+                    jobs = jobs_data.get("jobs", [])
+                    source_url = jobs_data.get("source_url", "unknown")
+                    all_jobs.extend(jobs)
+                    logger.debug(f"Drained {len(jobs)} jobs from {source_url}")
+
+            except asyncio.TimeoutError:
+                # No more messages in queue
+                logger.info(f"Queue drained: {len(all_jobs)} total jobs collected")
+                break
+            except Exception as e:
+                logger.error(f"Error draining queue: {e}")
+                break
+
+        return all_jobs

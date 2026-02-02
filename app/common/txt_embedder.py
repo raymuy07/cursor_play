@@ -40,13 +40,18 @@ class TextEmbedder:
         except Exception as e:
             raise RuntimeError(f"Error generating embedding: {e}") from e
 
-    def _create_batch_jsonl(self, texts: list[str], output_path: str) -> str:
-        """Create a JSONL file for batch embedding requests."""
+    def _create_batch_jsonl(self, jobs_with_text: list[tuple[str, str]], output_path: str) -> str:
+        """Create a JSONL file for batch embedding requests.
+
+        Args:
+            jobs_with_text: List of (url_hash, text) tuples
+            output_path: Path to write the JSONL file
+        """
         tasks = []
 
-        for index, text in enumerate(texts):
+        for url_hash, text in jobs_with_text:
             task = {
-                "custom_id": f"embed-{index}",
+                "custom_id": url_hash,  # Use url_hash directly as custom_id
                 "method": "POST",
                 "url": "/v1/embeddings",
                 "body": {"model": self.model_name, "input": text},
@@ -60,22 +65,26 @@ class TextEmbedder:
         logger.debug(f"Created batch JSONL file with {len(tasks)} tasks at {output_path}")
         return output_path
 
-    async def create_embedding_batch(self, texts: list[str]) -> str:
+    async def create_embedding_batch(self, jobs_with_text: list[tuple[str, str]]) -> str:
         """
         Create a batch job for embedding multiple texts.
         Uses OpenAI Batch API - 50% cheaper, results within 24h.
+
+        Args:
+            jobs_with_text: List of (url_hash, text) tuples. url_hash is used as custom_id
+                           so we can map embeddings back to jobs when results arrive.
         Returns:
             batch_id: The ID of the created batch job
         """
-        if not texts:
-            raise ValueError("Cannot create batch for empty text list")
+        if not jobs_with_text:
+            raise ValueError("Cannot create batch for empty job list")
 
         # Create temporary JSONL file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
             jsonl_path = tmp.name
 
         try:
-            self._create_batch_jsonl(texts, jsonl_path)
+            self._create_batch_jsonl(jobs_with_text, jsonl_path)
             # Upload the file to OpenAI
             with open(jsonl_path, "rb") as file:
                 batch_file = await self.client.files.create(file=file, purpose="batch")
@@ -86,7 +95,7 @@ class TextEmbedder:
                 input_file_id=batch_file.id, endpoint="/v1/embeddings", completion_window="24h"
             )
 
-            logger.info(f"Created batch job: {batch_job.id} with {len(texts)} texts")
+            logger.info(f"Created batch job: {batch_job.id} with {len(jobs_with_text)} jobs")
             return batch_job.id
 
         finally:
@@ -111,7 +120,10 @@ class TextEmbedder:
     def get_batch_results(self, batch_id: str) -> dict[str, list[float]]:
         """
         Retrieve results from a completed batch job.
-        its not async casue we use in in the scheduler which is blocking.
+
+        Returns:
+            Dict mapping url_hash (str) to embedding vector.
+            e.g., {"abc123": [0.1, 0.2, ...], "def456": [0.3, 0.4, ...]}
         """
         batch = self.client.batches.retrieve(batch_id)
 
@@ -129,10 +141,9 @@ class TextEmbedder:
             if not line:
                 continue
             result = json.loads(line)
-            custom_id = result["custom_id"]
-            # Extract index from custom_id (e.g., "embed-5" -> 5)
+            url_hash = result["custom_id"]  # url_hash was used as custom_id
             embedding = result["response"]["body"]["data"][0]["embedding"]
-            embeddings[custom_id] = embedding
+            embeddings[url_hash] = embedding
 
         logger.info(f"Retrieved {len(embeddings)} embeddings from batch {batch_id}")
         return embeddings

@@ -5,14 +5,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.common.txt_embedder import TextEmbedder
 from app.common.utils import load_config, setup_logging
+from app.core.db_utils import CompaniesDB, JobsDB, PendingEmbeddedDB
+from app.core.message_queue import CompanyQueue, RabbitMQConnection
 from app.services.company_manager import CompanyManager
-from app.services.db_utils import CompaniesDB, JobsDB, PendingEmbeddedDB
 from app.services.job_persister import JobPersister
-from app.services.message_queue import CompanyQueue, RabbitMQConnection
+from app.workers.embedder_worker import run_daily_embedding
+from app.workers.job_manager import JobManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +36,9 @@ class Scheduler:
         self.company_queue = CompanyQueue(self.rabbitmq)
         self.company_manager = CompanyManager(self.companies_db, self.config, self.company_queue)
         self.embedder = TextEmbedder()
-        self.job_persister = JobPersister()
-
+        self.job_persister = JobPersister(self.jobs_db,self.pending_db,self.embedder)
+        self.job_manager = JobManager(self.job_persister, self.pending_db, self.embedder, self.job_queue)
+        
     def start(self):
         """Start the scheduler and keep the main thread alive."""
         self._setup_jobs()
@@ -63,22 +67,38 @@ class Scheduler:
             name="Publish stale companies for scraping",
         )
 
-        # 2. Check for completed embedding batches (every hour)
-        self.scheduler.add_job(
-            self._run_async_task,
-            trigger=IntervalTrigger(hours=1),
-            args=[self.job_persister.check_pending_batches, self.pending_db],
-            id="check_pending_batches",
-            name="Check pending embedding batches",
-        )
-
-        # 3. Search for new companies (once a week)
+        # 2. Search for new companies (once a week)
         self.scheduler.add_job(
             self._run_async_task,
             trigger=IntervalTrigger(weeks=1),
             args=[self.company_manager.search_for_companies],
             id="search_for_companies",
             name="Search for new companies",
+        )
+
+        # 3. Daily embedding: drain job queue, filter, embed batch (once a day at 2 AM)
+        self.scheduler.add_job(
+            self._run_async_task,
+            trigger=CronTrigger(hour=2, minute=0),
+            args=[run_daily_embedding],
+            id="daily_embedding",
+            name="Daily job embedding batch",
+        )
+
+        # 4. Persist completed batches: check OpenAI, save jobs to DB (twice daily at 8 AM and 8 PM)
+        self.scheduler.add_job(
+            self._run_async_task,
+            trigger=CronTrigger(hour=8, minute=0),
+            args=[self.job_persister.persist_batch],
+            id="persist_batch_morning",
+            name="Persist embedding batches (morning)",
+        )
+        self.scheduler.add_job(
+            self._run_async_task,
+            trigger=CronTrigger(hour=20, minute=0),
+            args=[self.job_persister.persist_batch],
+            id="persist_batch_evening",
+            name="Persist embedding batches (evening)",
         )
 
     def _run_async_task(self, coro_func, *args, **kwargs):

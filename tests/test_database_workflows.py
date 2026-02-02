@@ -3,8 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
-from app.services.job_embedder import JobEmbedder
 
+from app.services.job_filter import JobFilter
 from app.services.job_persister import JobPersister
 
 
@@ -75,7 +75,7 @@ def test_save_jobs_flow_with_html_fixtures(temp_jobs_db, parse_fixture_jobs, htm
     fixture_name = html_fixture_names[0]
     parsed_jobs = parse_fixture_jobs(fixture_name)
 
-    valid_jobs, filter_counts = JobEmbedder.filter_valid_jobs(deepcopy(parsed_jobs))
+    valid_jobs, filter_counts = JobFilter.filter_valid_jobs(deepcopy(parsed_jobs))
 
     success, inserted, skipped = JobPersister.save_jobs_to_db(deepcopy(parsed_jobs), temp_jobs_db)
 

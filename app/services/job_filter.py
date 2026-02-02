@@ -1,18 +1,10 @@
 import logging
 
-from app.common.txt_embedder import TextEmbedder
-from app.core.db_utils import PendingEmbeddedDB
-
 logger = logging.getLogger(__name__)
 
 
-class JobEmbedder:
+class JobFilter:
     """Handles filtering, validation, and embedding of job batches."""
-
-    def __init__(self, pending_db: PendingEmbeddedDB, text_embedder: TextEmbedder):
-        self.pending_db = pending_db
-        self.embedder = text_embedder
-        self.total_jobs_for_batch = []
 
     @staticmethod
     def is_hebrew_job(job: dict) -> bool:
@@ -68,12 +60,12 @@ class JobEmbedder:
 
         for job in jobs:
             # Filter: Jobs not in Israel
-            if not JobEmbedder.is_in_israel_filter(job):
+            if not JobFilter.is_in_israel_filter(job):
                 filter_counts["job_not_in_israel"] += 1
                 continue
 
             # Filter: Hebrew jobs
-            if JobEmbedder.is_hebrew_job(job):
+            if JobFilter.is_hebrew_job(job):
                 filter_counts["hebrew"] += 1
                 continue
 
@@ -89,26 +81,3 @@ class JobEmbedder:
             valid_jobs.append(job)
 
         return valid_jobs, filter_counts
-
-    async def process_batch(self, jobs_data: dict):
-        """Process a batch of jobs from the queue.
-
-        Called by the job queue consumer. Filters jobs and submits for embedding.
-        """
-        jobs = jobs_data.get("jobs", [])
-        source_url = jobs_data.get("source_url", "")
-
-        valid_jobs, filter_counts = self.filter_valid_jobs(jobs)
-
-        if valid_jobs:
-            logger.info(f"Filtered {len(valid_jobs)} jobs from {source_url} (removed: {filter_counts})")
-            self.total_jobs_for_batch.extend(valid_jobs)
-
-            # When batch is large enough, submit for embedding
-            if len(self.total_jobs_for_batch) >= 500:
-                batch_id = await self.embedder.create_embedding_batch(self.total_jobs_for_batch)
-                await self.pending_db.insert_pending_batch_id(batch_id)
-                self.total_jobs_for_batch = []
-                logger.info(f"Submitted embedding batch: {batch_id}")
-        else:
-            logger.warning(f"No valid jobs found from {source_url}")
