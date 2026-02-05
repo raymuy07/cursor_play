@@ -58,5 +58,5 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=yes ${{ secrets.NUC_SSH_USER }}@${{ secrets.NUC_SSH_HOST }} "\
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin && \
             cd /opt/job-hunter-server && \
-            GHCR_USER=${{ github.actor }} docker compose pull && \
-            GHCR_USER=${{ github.actor }} docker compose up -d"
+            GHCR_USER=${{ github.actor }} docker compose -f docker-compose.yml pull && \
+            GHCR_USER=${{ github.actor }} docker compose -f docker-compose.yml up -d"
