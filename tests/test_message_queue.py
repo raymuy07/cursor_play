@@ -145,8 +145,11 @@ class TestCompanyQueue:
             # After yielding, raise to break the loop for testing
             raise asyncio.CancelledError()
 
-        mock_rmq_queue.iterator.return_value.__aenter__ = AsyncMock(return_value=mock_iterator())
-        mock_rmq_queue.iterator.return_value.__aexit__ = AsyncMock()
+        # Set up iterator() to return an async context manager that yields messages
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_iterator())
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_rmq_queue.iterator.return_value = mock_ctx
 
         mock_rabbitmq.channel.get_queue = AsyncMock(return_value=mock_rmq_queue)
         mock_rabbitmq.channel.set_qos = AsyncMock()
