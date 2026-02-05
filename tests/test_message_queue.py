@@ -138,15 +138,17 @@ class TestCompanyQueue:
         mock_message.body = json.dumps(company_data).encode()
 
         # Create mock queue iterator that yields one message then stops
-        mock_rmq_queue = AsyncMock()
+        mock_rmq_queue = MagicMock()
 
         async def mock_iterator():
             yield mock_message
             # After yielding, raise to break the loop for testing
             raise asyncio.CancelledError()
 
-        # Set up iterator() to return an async context manager that yields messages
-        mock_ctx = AsyncMock()
+        # queue.iterator() is called synchronously (not awaited) and used as
+        # `async with queue.iterator() as queue_iter:`, so iterator must be a
+        # regular MagicMock returning an async context manager.
+        mock_ctx = MagicMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_iterator())
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
         mock_rmq_queue.iterator.return_value = mock_ctx
