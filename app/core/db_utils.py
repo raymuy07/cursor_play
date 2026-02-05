@@ -535,8 +535,8 @@ class JobsDB:
                 return None
 
             # Normalize department and location
-            dept_id = await self.get_department_id(self._conn, job_data.get("department"))
-            loc_id = await self.get_location_id(self._conn, job_data.get("location"))
+            dept_id = await self.get_department_id(job_data.get("department"))
+            loc_id = await self.get_location_id(job_data.get("location"))
 
             # Handle description - convert dict to text if needed
             description = job_data.get("description", "")

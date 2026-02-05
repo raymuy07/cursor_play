@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from app.services.db_utils import generate_url_hash
+from app.core.db_utils import generate_url_hash
 
 # Ensure project root is importable when tests run from the repository root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -80,7 +80,7 @@ def load_fixture_html() -> callable[[str], str]:
 def parse_fixture_jobs(request: pytest.FixtureRequest, load_fixture_html) -> callable[[str], list[dict]]:
     """Parse jobs from an HTML fixture and optionally persist a JSON snapshot."""
     # Lazy imports to avoid cascading import errors for unrelated tests
-    from app.services.job_scraper import JobScraper
+    from app.services.scraper import JobScraper
 
     update_snapshots = request.config.getoption("--update-job-snapshots")
 
@@ -119,22 +119,23 @@ def parsed_job_snapshots(parse_fixture_jobs, html_fixture_names) -> dict[str, li
 @pytest.fixture()
 def temp_companies_db(tmp_path):
     """Provision an isolated companies.db for tests."""
-    from db.schema.db_schema import get_companies_schema
-
-    from app.services.db_utils import CompaniesDB, initialize_database
+    from app.core.db_utils import CompaniesDB, initialize_database
+    from app.db.schema.db_schema import get_companies_schema
 
     db_path = tmp_path / "companies.db"
     initialize_database(str(db_path), get_companies_schema())
     return CompaniesDB(db_path=str(db_path))
 
 
-@pytest.fixture()
-def temp_jobs_db(tmp_path):
+@pytest.fixture
+async def temp_jobs_db(tmp_path):
     """Provision an isolated jobs.db for tests."""
-    from db.schema.db_schema import get_jobs_schema
-
-    from app.services.db_utils import JobsDB, initialize_database
+    from app.core.db_utils import JobsDB, initialize_database
+    from app.db.schema.db_schema import get_jobs_schema
 
     db_path = tmp_path / "jobs.db"
     initialize_database(str(db_path), get_jobs_schema())
-    return JobsDB(db_path=str(db_path))
+    jobs_db = JobsDB(db_path=str(db_path))
+    await jobs_db.connect()
+    yield jobs_db
+    await jobs_db.close()
