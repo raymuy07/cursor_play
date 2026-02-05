@@ -1,0 +1,26 @@
+# Docker Compose for integration test infrastructure
+# Usage: docker-compose -f docker-compose.test.yml up -d
+#
+# This starts the services needed for integration tests:
+# - RabbitMQ: Message broker for company and jobs queues
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: jobtaker-rabbitmq-test
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI (http://localhost:15672, guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_test_data:/var/lib/rabbitmq
+
+volumes:
+  rabbitmq_test_data:

@@ -23,6 +23,7 @@ dependencies = [
     "aiosqlite",
     "httpx",
     "PyYAML",
+    "eval-type-backport",
 ]
 
 [project.optional-dependencies]

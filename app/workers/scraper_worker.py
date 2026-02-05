@@ -5,7 +5,7 @@ import logging
 
 from app.common.utils import setup_logging
 from app.core.db_utils import JobsDB
-from app.services.message_queue import RabbitMQConnection
+from app.core.message_queue import RabbitMQConnection
 from app.services.scrape_coordinator import ScraperCoordinator
 
 logger = logging.getLogger("app.workers")

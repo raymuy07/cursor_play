@@ -14,8 +14,7 @@ from app.core.db_utils import CompaniesDB, JobsDB, PendingEmbeddedDB
 from app.core.message_queue import CompanyQueue, RabbitMQConnection
 from app.services.company_manager import CompanyManager
 from app.services.job_persister import JobPersister
-from app.workers.embedder_worker import run_daily_embedding
-from app.workers.job_manager import JobManager
+from app.services.job_manager import JobManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class Scheduler:
         self.embedder = TextEmbedder()
         self.job_persister = JobPersister(self.jobs_db,self.pending_db,self.embedder)
         self.job_manager = JobManager(self.job_persister, self.pending_db, self.embedder, self.job_queue)
-        
+
     def start(self):
         """Start the scheduler and keep the main thread alive."""
         self._setup_jobs()
@@ -80,7 +79,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._run_async_task,
             trigger=CronTrigger(hour=2, minute=0),
-            args=[run_daily_embedding],
+            args=[self.job_manager.proccess_jobs_from_queue],
             id="daily_embedding",
             name="Daily job embedding batch",
         )
