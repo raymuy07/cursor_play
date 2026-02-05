@@ -127,12 +127,15 @@ def temp_companies_db(tmp_path):
     return CompaniesDB(db_path=str(db_path))
 
 
-@pytest.fixture()
-def temp_jobs_db(tmp_path):
+@pytest.fixture
+async def temp_jobs_db(tmp_path):
     """Provision an isolated jobs.db for tests."""
     from app.core.db_utils import JobsDB, initialize_database
     from app.db.schema.db_schema import get_jobs_schema
 
     db_path = tmp_path / "jobs.db"
     initialize_database(str(db_path), get_jobs_schema())
-    return JobsDB(db_path=str(db_path))
+    jobs_db = JobsDB(db_path=str(db_path))
+    await jobs_db.connect()
+    yield jobs_db
+    await jobs_db.close()

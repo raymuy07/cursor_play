@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "Job scraping and matching pipeline"
 requires-python = ">=3.9"
 dependencies = [
-    "playwright",
     "requests",
     "beautifulsoup4",
     "pydantic",

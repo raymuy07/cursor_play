@@ -8,12 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.message_queue import (
+from app.core.message_queue import (
     COMPANIES_QUEUE,
     JOBS_QUEUE,
     BaseQueue,
     CompanyQueue,
     JobQueue,
+    QueueItem,
     RabbitMQConnection,
 )
 
@@ -35,7 +36,7 @@ class TestRabbitMQConnection:
         mock_channel = AsyncMock()
         mock_channel.is_closed = False
 
-        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.core.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             mock_connect.return_value = mock_connection
             mock_connection.channel.return_value = mock_channel
 
@@ -59,7 +60,7 @@ class TestRabbitMQConnection:
         rabbitmq.connection = mock_connection
         rabbitmq.channel = mock_channel
 
-        with patch("app.services.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
+        with patch("app.core.message_queue.aio_pika.connect_robust", new_callable=AsyncMock) as mock_connect:
             await rabbitmq.connect()
             mock_connect.assert_not_called()
 
@@ -109,7 +110,7 @@ class TestCompanyQueue:
             "company_page_url": "https://jobs.lever.co/testcorp",
         }
 
-        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.core.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -126,47 +127,44 @@ class TestCompanyQueue:
             assert publish_call.kwargs["routing_key"] == COMPANIES_QUEUE
 
     @pytest.mark.asyncio
-    async def test_consume_processes_messages(self, mock_rabbitmq):
-        """Test that consume() processes messages with callback."""
+    async def test_feed_queue_puts_items_into_internal_queue(self, mock_rabbitmq):
+        """Test that feed_queue() puts messages into an asyncio.Queue."""
         queue = CompanyQueue(mock_rabbitmq)
 
         company_data = {"company_name": "Test Corp", "domain": "lever"}
-        received_companies: list[dict] = []
-
-        async def callback(company: dict):
-            received_companies.append(company)
 
         # Create mock message
         mock_message = AsyncMock()
         mock_message.body = json.dumps(company_data).encode()
-        mock_message.process.return_value.__aenter__ = AsyncMock()
-        mock_message.process.return_value.__aexit__ = AsyncMock()
 
-        # Create mock queue iterator
-        mock_queue = AsyncMock()
+        # Create mock queue iterator that yields one message then stops
+        mock_rmq_queue = AsyncMock()
 
         async def mock_iterator():
             yield mock_message
+            # After yielding, raise to break the loop for testing
+            raise asyncio.CancelledError()
 
-        mock_queue.iterator.return_value.__aenter__ = AsyncMock(return_value=mock_iterator())
-        mock_queue.iterator.return_value.__aexit__ = AsyncMock()
+        mock_rmq_queue.iterator.return_value.__aenter__ = AsyncMock(return_value=mock_iterator())
+        mock_rmq_queue.iterator.return_value.__aexit__ = AsyncMock()
 
-        mock_rabbitmq.channel.get_queue = AsyncMock(return_value=mock_queue)
+        mock_rabbitmq.channel.get_queue = AsyncMock(return_value=mock_rmq_queue)
+        mock_rabbitmq.channel.set_qos = AsyncMock()
 
-        # We need to break out of the infinite consume loop after processing one message
-        call_count = 0
+        # Create internal queue to receive items
+        internal_queue: asyncio.Queue[QueueItem] = asyncio.Queue()
 
-        async def limited_callback(company: dict):
-            nonlocal call_count
-            call_count += 1
-            received_companies.append(company)
-            if call_count >= 1:
-                raise StopAsyncIteration()
+        # Run feed_queue (will be cancelled after processing one message)
+        try:
+            await queue.feed_queue(internal_queue, prefetch=1)
+        except asyncio.CancelledError:
+            pass
 
-        # Since consume runs forever, we test the setup parts
-        mock_rabbitmq.channel.get_queue.return_value = mock_queue
-        await mock_rabbitmq.channel.get_queue(COMPANIES_QUEUE)
-        mock_rabbitmq.channel.get_queue.assert_called_with(COMPANIES_QUEUE)
+        # Verify item was put into internal queue
+        assert not internal_queue.empty()
+        item = await internal_queue.get()
+        assert item.data == company_data
+        assert item.message == mock_message
 
 
 class TestJobQueue:
@@ -192,7 +190,7 @@ class TestJobQueue:
         ]
         source_url = "https://example.com/careers"
 
-        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.core.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -219,7 +217,7 @@ class TestJobQueue:
         jobs = [{"title": "Engineer", "posted_at": datetime(2025, 1, 10)}]
         source_url = "https://example.com/careers"
 
-        with patch("app.services.message_queue.aio_pika.Message") as mock_message_class:
+        with patch("app.core.message_queue.aio_pika.Message") as mock_message_class:
             mock_message = MagicMock()
             mock_message_class.return_value = mock_message
 
@@ -285,7 +283,7 @@ class TestMessageQueueIntegration:
             await rabbitmq.close()
 
     async def test_company_queue_roundtrip(self, rabbitmq_connection):
-        """Test publishing and consuming a company through the queue."""
+        """Test publishing and consuming a company through the queue via feed_queue."""
         company_queue = CompanyQueue(rabbitmq_connection)
 
         test_company = {
@@ -297,18 +295,29 @@ class TestMessageQueueIntegration:
         # Publish
         await company_queue.publish(test_company)
 
-        # Consume (with timeout)
-        received = None
+        # Consume via feed_queue into an internal asyncio.Queue
+        internal_queue: asyncio.Queue[QueueItem] = asyncio.Queue()
 
-        async def capture_company(company: dict):
-            nonlocal received
-            received = company
-            raise asyncio.CancelledError()  # Break out of consume loop
+        async def feed_with_timeout():
+            await company_queue.feed_queue(internal_queue, prefetch=1)
+
+        # Start feed_queue in background, cancel after we get our message
+        feed_task = asyncio.create_task(feed_with_timeout())
 
         try:
-            await asyncio.wait_for(company_queue.consume(capture_company, prefetch=1), timeout=5.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass
+            # Wait for item to appear in internal queue
+            item = await asyncio.wait_for(internal_queue.get(), timeout=5.0)
+            received = item.data
+            # Ack the message
+            await item.message.ack()
+        except asyncio.TimeoutError:
+            received = None
+        finally:
+            feed_task.cancel()
+            try:
+                await feed_task
+            except asyncio.CancelledError:
+                pass
 
         assert received is not None
         assert received["company_name"] == test_company["company_name"]
@@ -331,10 +340,10 @@ class TestMessageQueueIntegration:
         received_jobs = None
         received_source = None
 
-        async def capture_jobs(jobs: list, source_url: str):
+        async def capture_jobs(jobs_data: dict):
             nonlocal received_jobs, received_source
-            received_jobs = jobs
-            received_source = source_url
+            received_jobs = jobs_data.get("jobs")
+            received_source = jobs_data.get("source_url")
             raise asyncio.CancelledError()
 
         try:
