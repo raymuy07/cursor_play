@@ -15,9 +15,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.db_utils import JobsDB
 from app.core.logging import setup_logging
-from app.models.job import validate_jobs
 from app.services.scraper import JobScraper, fetch_html_from_url
 
 logger = logging.getLogger(__name__)
@@ -91,23 +89,6 @@ async def main():
     # Summary
     success = sum(1 for r in results if r["success"])
     total_jobs = sum(r["jobs"] for r in results)
-
-    # --- INIT ONLY: run once to create data/frozen_jobs.db, then delete this block ---
-    all_raw = []
-    for r in results:
-        all_raw.extend(r.get("job_list") or [])
-    valid_jobs, _ = validate_jobs(all_raw)
-    if valid_jobs:
-        frozen = JobsDB(db_path=str(FROZEN_JOBS_DB))
-        frozen.initialize_database()
-        await frozen.connect()
-        inserted = 0
-        for j in valid_jobs:
-            if await frozen.insert_job(j):
-                inserted += 1
-        await frozen.close()
-        logger.info(f"Frozen DB: inserted {inserted}/{len(valid_jobs)} jobs into {FROZEN_JOBS_DB}")
-    # --- end init block ---
 
     logger.info(f"\n{'=' * 40}")
     logger.info(f"Done: {success}/{len(TEST_URLS)} succeeded, {total_jobs} total jobs")
