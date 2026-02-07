@@ -1,10 +1,11 @@
+from __future__ import annotations
+
+import datetime as dt
 import json
 import logging
 import logging.config
 import logging.handlers
-import datetime as dt
-from typing import Any, override
-
+from typing import Any
 
 LOG_RECORD_BUILTIN_ATTRS = {
     "args",
@@ -100,7 +101,6 @@ class MyJsonFormatter(logging.Formatter):
         super().__init__()
         self.fmt_keys = fmt_keys if fmt_keys is not None else {}
 
-    @override
     def format(self, record: logging.LogRecord) -> str:
         message = self._prepare_log_dict(record)
         return json.dumps(message, default=str)
@@ -108,9 +108,7 @@ class MyJsonFormatter(logging.Formatter):
     def _prepare_log_dict(self, record: logging.LogRecord) -> dict[str, Any]:
         always_fields = {
             "message": record.getMessage(),
-            "timestamp": dt.datetime.fromtimestamp(
-                record.created, tz=dt.timezone.utc
-            ).isoformat(),
+            "timestamp": dt.datetime.fromtimestamp(record.created, tz=dt.timezone.utc).isoformat(),
         }
 
         if record.exc_info is not None:
@@ -120,9 +118,7 @@ class MyJsonFormatter(logging.Formatter):
             always_fields["stack_info"] = self.formatStack(record.stack_info)
 
         message = {
-            key: msg_val
-            if (msg_val := always_fields.pop(val, None)) is not None
-            else getattr(record, val)
+            key: msg_val if (msg_val := always_fields.pop(val, None)) is not None else getattr(record, val)
             for key, val in self.fmt_keys.items()
         }
         message.update(always_fields)
@@ -136,7 +132,6 @@ class MyJsonFormatter(logging.Formatter):
 
 
 class NonErrorFilter(logging.Filter):
-    @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         return record.levelno <= logging.INFO
 
