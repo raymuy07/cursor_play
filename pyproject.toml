@@ -40,6 +40,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests (require external services like RabbitMQ)",
+    "prompt: tests to initiate when changing llm model or prompt",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

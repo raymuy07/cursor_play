@@ -15,7 +15,9 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.common.utils import setup_logging
+from app.core.db_utils import JobsDB
+from app.core.logging import setup_logging
+from app.models.job import validate_jobs
 from app.services.scraper import JobScraper, fetch_html_from_url
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ TEST_URLS = [
     {"name": "IRONSCALES", "url": "https://www.comeet.com/jobs/ironscales/1A.007"},
     {"name": "Penlink", "url": "https://www.comeet.com/jobs/penlink/E5.002"},
     {"name": "Accelerated Digital Media", "url": "https://www.comeet.com/jobs/accelerateddigitalmedia/49.00D"},
-    {"name": "Test Company", "url": "https://www.comeet.com/jobs/testcompany/TEST.001"},
+    {"name": "Sedric.ai", "url": "https://www.comeet.com/jobs/sedric/0A.00F"},
 ]
 
 
@@ -50,6 +52,7 @@ async def scrape_url(name: str, url: str, client: httpx.AsyncClient) -> dict:
         scraper = JobScraper(html)
         jobs = scraper.extract_jobs()
         result["jobs"] = len(jobs)
+        result["job_list"] = jobs
         result["success"] = True
 
         if jobs:
@@ -64,8 +67,11 @@ async def scrape_url(name: str, url: str, client: httpx.AsyncClient) -> dict:
     except Exception as e:
         result["error"] = str(e)
         logger.error(f"  ✗ Error: {e}")
-
+    result.setdefault("job_list", [])
     return result
+
+
+FROZEN_JOBS_DB = Path(__file__).parent.parent / "data" / "frozen_jobs.db"
 
 
 async def main():
@@ -85,6 +91,23 @@ async def main():
     # Summary
     success = sum(1 for r in results if r["success"])
     total_jobs = sum(r["jobs"] for r in results)
+
+    # --- INIT ONLY: run once to create data/frozen_jobs.db, then delete this block ---
+    all_raw = []
+    for r in results:
+        all_raw.extend(r.get("job_list") or [])
+    valid_jobs, _ = validate_jobs(all_raw)
+    if valid_jobs:
+        frozen = JobsDB(db_path=str(FROZEN_JOBS_DB))
+        frozen.initialize_database()
+        await frozen.connect()
+        inserted = 0
+        for j in valid_jobs:
+            if await frozen.insert_job(j):
+                inserted += 1
+        await frozen.close()
+        logger.info(f"Frozen DB: inserted {inserted}/{len(valid_jobs)} jobs into {FROZEN_JOBS_DB}")
+    # --- end init block ---
 
     logger.info(f"\n{'=' * 40}")
     logger.info(f"Done: {success}/{len(TEST_URLS)} succeeded, {total_jobs} total jobs")

@@ -63,7 +63,7 @@ logging_config = {
     "handlers": {
         "stdout": {
             "class": "logging.StreamHandler",
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "simple",
             "filters": ["no_errors"],
             "stream": "ext://sys.stdout",
@@ -85,7 +85,7 @@ logging_config = {
     },
     "loggers": {
         "root": {
-            "level": "DEBUG",
+            "level": "INFO",
             "handlers": ["stdout", "stderr", "file"],
         },
     },
